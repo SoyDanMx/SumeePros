@@ -13,7 +13,7 @@ import { supabaseUrl } from '@/lib/supabase';
 export default function ProfileScreen() {
     const { theme } = useTheme();
     const router = useRouter();
-    const { user, signOut } = useAuth();
+    const { user, signOut, profile } = useAuth();
     const [userBadges, setUserBadges] = React.useState<UserBadges | null>(null);
 
     React.useEffect(() => {
@@ -56,17 +56,17 @@ export default function ProfileScreen() {
                                 </View>
                             </TouchableOpacity>
                             <View style={{ flex: 1, marginLeft: 16, paddingTop: 8 }}>
-                                <Text variant="h2">{/*user?.name ||*/ 'Dan Nuno'}</Text>
-                                <Text color={theme.textSecondary} style={{ marginBottom: 4 }}>Especialista en CCTV y Seguridad</Text>
-                                <Text variant="caption" color={theme.textSecondary}>danaserviciosintegrales@gmail.com</Text>
+                                <Text variant="h2">{user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Profesional'}</Text>
+                                <Text color={theme.textSecondary} style={{ marginBottom: 4 }}>{profile?.specialty || 'Especialista Sumee'}</Text>
+                                <Text variant="caption" color={theme.textSecondary}>{user?.email || user?.phone || 'Sin contacto'}</Text>
 
                                 <View style={styles.ratingRow}>
                                     {[1, 2, 3, 4, 5].map(i => (
                                         <Star key={i} size={14} color="#F59E0B" fill="#F59E0B" style={{ marginRight: 2 }} />
                                     ))}
-                                    <Text variant="caption" weight="bold" style={{ marginLeft: 4 }}>5.0/5.0</Text>
+                                    <Text variant="caption" weight="bold" style={{ marginLeft: 4 }}>{profile?.average_rating || '5.0'}/5.0</Text>
                                     <View style={[styles.idBadge, { backgroundColor: theme.surface }]}>
-                                        <Text variant="caption" style={{ fontSize: 10 }}>ID: 158107</Text>
+                                        <Text variant="caption" style={{ fontSize: 10 }}>ID: {user?.id?.substring(0, 8).toUpperCase()}</Text>
                                     </View>
                                 </View>
 

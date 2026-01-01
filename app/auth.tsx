@@ -18,7 +18,8 @@ import { Button } from '@/components/Button';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'expo-router';
-import { Eye, EyeOff, Mail, Lock } from 'lucide-react-native';
+import { Eye, EyeOff, Mail, Lock, Phone } from 'lucide-react-native';
+import { Alert } from 'react-native';
 
 // Brand Colors from Web parity
 const SUMEE_PURPLE = '#6D28D9';
@@ -29,19 +30,34 @@ const INPUT_BORDER = '#D1D5DB';
 
 export default function LoginScreen() {
     const router = useRouter();
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
+    const [phone, setPhone] = useState('');
+    const [otp, setOtp] = useState('');
+    const [step, setStep] = useState<'phone' | 'otp'>('phone');
     const [loading, setLoading] = useState(false);
-    const [showPassword, setShowPassword] = useState(false);
+    const { signInWithPhone, verifyOtp } = useAuth();
 
-    const handleLogin = async () => {
-        if (!email || !password) return;
+    const handleSendOtp = async () => {
+        if (!phone) return;
         setLoading(true);
-        // Simulate API call to Supabase/Auth
-        setTimeout(() => {
-            setLoading(false);
+        const { error } = await signInWithPhone(phone);
+        setLoading(false);
+        if (error) {
+            Alert.alert('Error', error.message);
+        } else {
+            setStep('otp');
+        }
+    };
+
+    const handleVerifyOtp = async () => {
+        if (!otp) return;
+        setLoading(true);
+        const { error } = await verifyOtp(phone, otp);
+        setLoading(false);
+        if (error) {
+            Alert.alert('Error', 'Código inválido o expirado.');
+        } else {
             router.replace('/(tabs)');
-        }, 1500);
+        }
     };
 
     return (
@@ -70,73 +86,59 @@ export default function LoginScreen() {
 
                             {/* Form Section */}
                             <View style={styles.formContainer}>
-                                {/* Email Field */}
-                                <View style={styles.inputGroup}>
-                                    <Text style={styles.label}>Correo Electrónico</Text>
-                                    <View style={styles.inputWrapper}>
-                                        <Mail size={20} color={TEXT_GRAY} style={styles.inputIcon} />
-                                        <TextInput
-                                            style={styles.input}
-                                            placeholder="ejemplo@correo.com"
-                                            placeholderTextColor="#9CA3AF"
-                                            value={email}
-                                            onChangeText={setEmail}
-                                            keyboardType="email-address"
-                                            autoCapitalize="none"
+                                {step === 'phone' ? (
+                                    <>
+                                        <View style={styles.inputGroup}>
+                                            <Text style={styles.label}>Número de Teléfono</Text>
+                                            <View style={styles.inputWrapper}>
+                                                <Phone size={20} color={TEXT_GRAY} style={styles.inputIcon} />
+                                                <TextInput
+                                                    style={styles.input}
+                                                    placeholder="55 1234 5678"
+                                                    placeholderTextColor="#9CA3AF"
+                                                    value={phone}
+                                                    onChangeText={setPhone}
+                                                    keyboardType="phone-pad"
+                                                />
+                                            </View>
+                                        </View>
+                                        <Button
+                                            title={loading ? "Enviando..." : "Enviar Código OTP"}
+                                            onPress={handleSendOtp}
+                                            loading={loading}
+                                            disabled={!phone}
+                                            style={styles.loginButton}
                                         />
-                                    </View>
-                                </View>
-
-                                {/* Password Field */}
-                                <View style={styles.inputGroup}>
-                                    <Text style={styles.label}>Contraseña</Text>
-                                    <View style={styles.inputWrapper}>
-                                        <Lock size={20} color={TEXT_GRAY} style={styles.inputIcon} />
-                                        <TextInput
-                                            style={[styles.input, { flex: 1 }]}
-                                            placeholder="••••••••"
-                                            placeholderTextColor="#9CA3AF"
-                                            value={password}
-                                            onChangeText={setPassword}
-                                            secureTextEntry={!showPassword}
+                                    </>
+                                ) : (
+                                    <>
+                                        <View style={styles.inputGroup}>
+                                            <Text style={styles.label}>Código de Verificación</Text>
+                                            <View style={styles.inputWrapper}>
+                                                <Lock size={20} color={TEXT_GRAY} style={styles.inputIcon} />
+                                                <TextInput
+                                                    style={styles.input}
+                                                    placeholder="123456"
+                                                    placeholderTextColor="#9CA3AF"
+                                                    value={otp}
+                                                    onChangeText={setOtp}
+                                                    keyboardType="number-pad"
+                                                    maxLength={6}
+                                                />
+                                            </View>
+                                        </View>
+                                        <Button
+                                            title={loading ? "Verificando..." : "Confirmar Código"}
+                                            onPress={handleVerifyOtp}
+                                            loading={loading}
+                                            disabled={otp.length < 6}
+                                            style={styles.loginButton}
                                         />
-                                        <TouchableOpacity
-                                            onPress={() => setShowPassword(!showPassword)}
-                                            style={styles.eyeIcon}
-                                        >
-                                            {showPassword ? (
-                                                <EyeOff size={20} color={TEXT_GRAY} />
-                                            ) : (
-                                                <Eye size={20} color={TEXT_GRAY} />
-                                            )}
+                                        <TouchableOpacity onPress={() => setStep('phone')} style={{ marginTop: 16, alignItems: 'center' }}>
+                                            <Text style={{ color: SUMEE_PURPLE }}>Cambiar número de teléfono</Text>
                                         </TouchableOpacity>
-                                    </View>
-                                </View>
-
-                                <TouchableOpacity style={styles.forgotPassword}>
-                                    <Text style={styles.forgotPasswordText}>¿Olvidaste tu contraseña?</Text>
-                                </TouchableOpacity>
-
-                                {/* Login Button */}
-                                <TouchableOpacity
-                                    style={[styles.loginButton, (!email || !password) && styles.loginButtonDisabled]}
-                                    onPress={handleLogin}
-                                    disabled={loading || !email || !password}
-                                >
-                                    {loading ? (
-                                        <ActivityIndicator color="white" />
-                                    ) : (
-                                        <Text style={styles.loginButtonText}>Iniciar Sesión</Text>
-                                    )}
-                                </TouchableOpacity>
-
-                                {/* Footer Link */}
-                                <View style={styles.footer}>
-                                    <Text style={styles.footerText}>¿No tienes una cuenta? </Text>
-                                    <TouchableOpacity>
-                                        <Text style={styles.footerLink}>Regístrate aquí</Text>
-                                    </TouchableOpacity>
-                                </View>
+                                    </>
+                                )}
                             </View>
 
                             {/* Social Login Divider (Optional but modern) */}
