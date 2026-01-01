@@ -35,7 +35,9 @@ export default function TabsLayout() {
             <Tabs.Screen
                 name="jobs"
                 options={{
-                    title: 'Jobs',
+                    title: 'Trabajos',
+                    tabBarLabel: 'Trabajos',
+                    headerTitle: 'Trabajos Disponibles',
                     tabBarIcon: ({ color, size }) => <Briefcase size={size} color={color} />,
                 }}
             />

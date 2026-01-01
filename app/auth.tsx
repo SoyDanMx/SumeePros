@@ -1,134 +1,318 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, TextInput, Image, TouchableWithoutFeedback, Keyboard } from 'react-native';
+import {
+    View,
+    StyleSheet,
+    TextInput,
+    TouchableWithoutFeedback,
+    Keyboard,
+    ActivityIndicator,
+    Image,
+    TouchableOpacity,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView
+} from 'react-native';
 import { Screen } from '@/components/Screen';
 import { Text } from '@/components/Text';
 import { Button } from '@/components/Button';
 import { useTheme } from '@/contexts/ThemeContext';
-import { useAuth } from '@/contexts/AuthContext'; // Assuming this hook exists
+import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'expo-router';
+import { Eye, EyeOff, Mail, Lock } from 'lucide-react-native';
+
+// Brand Colors from Web parity
+const SUMEE_PURPLE = '#6D28D9';
+const WEB_BLUE = '#1D4ED8';
+const TEXT_DARK = '#111827';
+const TEXT_GRAY = '#6B7280';
+const INPUT_BORDER = '#D1D5DB';
 
 export default function LoginScreen() {
-    const { theme } = useTheme();
     const router = useRouter();
-    // const { signIn } = useAuth(); // Mocking this for now if simpler
-    const [phone, setPhone] = useState('');
-    const [step, setStep] = useState<'phone' | 'otp'>('phone');
-    const [otp, setOtp] = useState('');
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
 
-    const handleSendCode = () => {
-        if (phone.length > 9) setStep('otp');
-    };
-
-    const handleVerify = () => {
-        // signIn();
-        router.replace('/(tabs)');
+    const handleLogin = async () => {
+        if (!email || !password) return;
+        setLoading(true);
+        // Simulate API call to Supabase/Auth
+        setTimeout(() => {
+            setLoading(false);
+            router.replace('/(tabs)');
+        }, 1500);
     };
 
     return (
-        <Screen style={{ justifyContent: 'center' }}>
-            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-                <View style={styles.container}>
-                    <View style={styles.logoContainer}>
-                        <View style={[styles.logoPlaceholder, { backgroundColor: theme.primary }]}>
-                            <Text variant="h1" color={theme.white}>S</Text>
+        <Screen style={{ backgroundColor: '#FFFFFF' }}>
+            <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                style={{ flex: 1 }}
+            >
+                <ScrollView
+                    contentContainerStyle={styles.scrollContent}
+                    keyboardShouldPersistTaps="handled"
+                >
+                    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+                        <View style={styles.container}>
+
+                            {/* Logo Section */}
+                            <View style={styles.logoContainer}>
+                                <Image
+                                    source={require('@/assets/images/sumee_logo_horizontal.png')}
+                                    style={styles.logo}
+                                    resizeMode="contain"
+                                />
+                                <Text style={styles.title}>Bienvenido de Nuevo</Text>
+                                <Text style={styles.subtitle}>Inicia sesión para continuar.</Text>
+                            </View>
+
+                            {/* Form Section */}
+                            <View style={styles.formContainer}>
+                                {/* Email Field */}
+                                <View style={styles.inputGroup}>
+                                    <Text style={styles.label}>Correo Electrónico</Text>
+                                    <View style={styles.inputWrapper}>
+                                        <Mail size={20} color={TEXT_GRAY} style={styles.inputIcon} />
+                                        <TextInput
+                                            style={styles.input}
+                                            placeholder="ejemplo@correo.com"
+                                            placeholderTextColor="#9CA3AF"
+                                            value={email}
+                                            onChangeText={setEmail}
+                                            keyboardType="email-address"
+                                            autoCapitalize="none"
+                                        />
+                                    </View>
+                                </View>
+
+                                {/* Password Field */}
+                                <View style={styles.inputGroup}>
+                                    <Text style={styles.label}>Contraseña</Text>
+                                    <View style={styles.inputWrapper}>
+                                        <Lock size={20} color={TEXT_GRAY} style={styles.inputIcon} />
+                                        <TextInput
+                                            style={[styles.input, { flex: 1 }]}
+                                            placeholder="••••••••"
+                                            placeholderTextColor="#9CA3AF"
+                                            value={password}
+                                            onChangeText={setPassword}
+                                            secureTextEntry={!showPassword}
+                                        />
+                                        <TouchableOpacity
+                                            onPress={() => setShowPassword(!showPassword)}
+                                            style={styles.eyeIcon}
+                                        >
+                                            {showPassword ? (
+                                                <EyeOff size={20} color={TEXT_GRAY} />
+                                            ) : (
+                                                <Eye size={20} color={TEXT_GRAY} />
+                                            )}
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+
+                                <TouchableOpacity style={styles.forgotPassword}>
+                                    <Text style={styles.forgotPasswordText}>¿Olvidaste tu contraseña?</Text>
+                                </TouchableOpacity>
+
+                                {/* Login Button */}
+                                <TouchableOpacity
+                                    style={[styles.loginButton, (!email || !password) && styles.loginButtonDisabled]}
+                                    onPress={handleLogin}
+                                    disabled={loading || !email || !password}
+                                >
+                                    {loading ? (
+                                        <ActivityIndicator color="white" />
+                                    ) : (
+                                        <Text style={styles.loginButtonText}>Iniciar Sesión</Text>
+                                    )}
+                                </TouchableOpacity>
+
+                                {/* Footer Link */}
+                                <View style={styles.footer}>
+                                    <Text style={styles.footerText}>¿No tienes una cuenta? </Text>
+                                    <TouchableOpacity>
+                                        <Text style={styles.footerLink}>Regístrate aquí</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+
+                            {/* Social Login Divider (Optional but modern) */}
+                            <View style={styles.dividerContainer}>
+                                <View style={styles.dividerLine} />
+                                <Text style={styles.dividerText}>o ingresa con</Text>
+                                <View style={styles.dividerLine} />
+                            </View>
+
+                            <View style={styles.socialRow}>
+                                <TouchableOpacity style={styles.socialBtn}>
+                                    <Image source={{ uri: 'https://cdn-icons-png.flaticon.com/512/2991/2991148.png' }} style={styles.socialIcon} />
+                                </TouchableOpacity>
+                                <TouchableOpacity style={styles.socialBtn}>
+                                    <Image source={{ uri: 'https://cdn-icons-png.flaticon.com/512/733/733547.png' }} style={styles.socialIcon} />
+                                </TouchableOpacity>
+                                <TouchableOpacity style={styles.socialBtn}>
+                                    <Image source={{ uri: 'https://cdn-icons-png.flaticon.com/512/0/747.png' }} style={styles.socialIcon} />
+                                </TouchableOpacity>
+                            </View>
+
                         </View>
-                        <Text variant="h1" style={{ marginTop: 16 }}>Sumee Pro</Text>
-                        <Text color={theme.textSecondary}>Para Profesionales</Text>
-                    </View>
-
-                    <View style={[styles.formCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                        {step === 'phone' ? (
-                            <>
-                                <Text variant="h3" style={{ marginBottom: 8 }}>Inicia Sesión</Text>
-                                <Text color={theme.textSecondary} style={{ marginBottom: 24 }}>Ingresa tu número celular para continuar</Text>
-
-                                <TextInput
-                                    style={[styles.input, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
-                                    placeholder="+52 (000) 000-0000"
-                                    placeholderTextColor={theme.textSecondary}
-                                    keyboardType="phone-pad"
-                                    value={phone}
-                                    onChangeText={setPhone}
-                                />
-
-                                <Button
-                                    title="Enviar Código"
-                                    onPress={handleSendCode}
-                                    style={{ marginTop: 16 }}
-                                    disabled={phone.length < 10}
-                                />
-                            </>
-                        ) : (
-                            <>
-                                <Text variant="h3" style={{ marginBottom: 8 }}>Verificación</Text>
-                                <Text color={theme.textSecondary} style={{ marginBottom: 24 }}>Ingresa el código enviado al {phone}</Text>
-
-                                <TextInput
-                                    style={[styles.input, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border, textAlign: 'center', letterSpacing: 8, fontSize: 24 }]}
-                                    placeholder="000000"
-                                    placeholderTextColor={theme.textSecondary}
-                                    keyboardType="number-pad"
-                                    maxLength={6}
-                                    value={otp}
-                                    onChangeText={setOtp}
-                                />
-
-                                <Button
-                                    title="Verificar"
-                                    onPress={handleVerify}
-                                    style={{ marginTop: 16 }}
-                                    disabled={otp.length < 4}
-                                />
-                                <Button
-                                    title="Cambiar número"
-                                    variant="ghost"
-                                    onPress={() => setStep('phone')}
-                                    style={{ marginTop: 8 }}
-                                />
-                            </>
-                        )}
-                    </View>
-                </View>
-            </TouchableWithoutFeedback>
+                    </TouchableWithoutFeedback>
+                </ScrollView>
+            </KeyboardAvoidingView>
         </Screen>
     );
 }
 
 const styles = StyleSheet.create({
+    scrollContent: {
+        flexGrow: 1,
+        justifyContent: 'center',
+    },
     container: {
         padding: 24,
-        flex: 1,
-        justifyContent: 'center',
+        alignItems: 'center',
     },
     logoContainer: {
         alignItems: 'center',
-        marginBottom: 48,
+        marginBottom: 40,
     },
-    logoPlaceholder: {
-        width: 80,
-        height: 80,
-        borderRadius: 20,
+    logo: {
+        width: 180,
+        height: 60,
+        marginBottom: 16,
+    },
+    title: {
+        fontSize: 28,
+        fontWeight: 'bold',
+        color: TEXT_DARK,
+        textAlign: 'center',
+    },
+    subtitle: {
+        fontSize: 16,
+        color: TEXT_GRAY,
+        textAlign: 'center',
+        marginTop: 4,
+    },
+    formContainer: {
+        width: '100%',
+    },
+    inputGroup: {
+        marginBottom: 20,
+    },
+    label: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: TEXT_DARK,
+        marginBottom: 8,
+    },
+    inputWrapper: {
+        flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center',
-    },
-    formCard: {
-        padding: 24,
-        borderRadius: 24,
         borderWidth: 1,
-        shadowColor: "#000",
-        shadowOffset: {
-            width: 0,
-            height: 4,
-        },
-        shadowOpacity: 0.05,
-        shadowRadius: 12,
-        elevation: 4,
+        borderColor: INPUT_BORDER,
+        borderRadius: 12,
+        backgroundColor: '#F9FAFB',
+        paddingHorizontal: 16,
+        height: 56,
+    },
+    inputIcon: {
+        marginRight: 12,
     },
     input: {
+        flex: 1,
+        fontSize: 16,
+        color: TEXT_DARK,
+        height: '100%',
+    },
+    eyeIcon: {
+        padding: 8,
+    },
+    forgotPassword: {
+        alignSelf: 'flex-end',
+        marginBottom: 24,
+    },
+    forgotPasswordText: {
+        color: TEXT_GRAY,
+        fontSize: 14,
+    },
+    loginButton: {
+        backgroundColor: WEB_BLUE,
         height: 56,
         borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+        shadowColor: WEB_BLUE,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+        elevation: 4,
+    },
+    loginButtonDisabled: {
+        backgroundColor: '#93C5FD',
+        shadowOpacity: 0,
+        elevation: 0,
+    },
+    loginButtonText: {
+        color: 'white',
+        fontSize: 18,
+        fontWeight: 'bold',
+    },
+    footer: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        marginTop: 24,
+    },
+    footerText: {
+        color: TEXT_GRAY,
+        fontSize: 14,
+    },
+    footerLink: {
+        color: WEB_BLUE,
+        fontSize: 14,
+        fontWeight: 'bold',
+    },
+    dividerContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 40,
+        width: '100%',
+    },
+    dividerLine: {
+        flex: 1,
+        height: 1,
+        backgroundColor: '#E5E7EB',
+    },
+    dividerText: {
         paddingHorizontal: 16,
-        fontSize: 16,
+        color: '#9CA3AF',
+        fontSize: 12,
+    },
+    socialRow: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        marginTop: 24,
+        gap: 20,
+    },
+    socialBtn: {
+        width: 50,
+        height: 50,
+        borderRadius: 25,
+        backgroundColor: 'white',
         borderWidth: 1,
+        borderColor: '#E5E7EB',
+        alignItems: 'center',
+        justifyContent: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    socialIcon: {
+        width: 24,
+        height: 24,
     }
 });
