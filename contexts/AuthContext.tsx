@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { AuthService } from '@/services/auth';
+import { NotificationsService } from '@/services/notifications';
 import { Session, User } from '@supabase/supabase-js';
 
 type AuthContextType = {
@@ -28,6 +29,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             const user = await AuthService.getCurrentUser();
             setUser(user ?? null);
             setSession(null);
+
+            if (user) {
+                // Register for push notifications
+                NotificationsService.registerForPushNotificationsAsync(user.id);
+            }
         } catch (error) {
             console.error('Error checking user:', error);
         } finally {
@@ -44,6 +50,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         if (data?.user) {
             setUser(data.user as User);
             setSession(data.session as Session);
+            NotificationsService.registerForPushNotificationsAsync(data.user.id);
         }
         return { error };
     };

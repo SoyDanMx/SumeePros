@@ -6,12 +6,22 @@ import { Card } from '@/components/Card';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { Star, ShieldCheck, MapPin, Briefcase, User, LogOut, HelpCircle, FileText, QrCode, ShoppingBag, Building2, Wallet } from 'lucide-react-native';
+import { Star, ShieldCheck, MapPin, Briefcase, User, LogOut, HelpCircle, FileText, QrCode, ShoppingBag, Building2, Wallet, Trophy, ChevronRight, Camera, Calculator, Image as ImageIcon, Bot } from 'lucide-react-native';
+import { BadgesService, UserBadges } from '@/services/badges';
+import { supabaseUrl } from '@/lib/supabase';
 
 export default function ProfileScreen() {
     const { theme } = useTheme();
     const router = useRouter();
     const { user, signOut } = useAuth();
+    const [userBadges, setUserBadges] = React.useState<UserBadges | null>(null);
+
+    React.useEffect(() => {
+        BadgesService.getUserBadges('me').then(setUserBadges);
+    }, []);
+
+    const currentLevelName = userBadges ? BadgesService.getLevelName(userBadges.currentLevel) : 'Cargando...';
+    const currentLevelColor = userBadges ? BadgesService.getLevelColor(userBadges.currentLevel) : '#94A3B8';
 
     const handleLogout = () => {
         signOut();
@@ -32,10 +42,19 @@ export default function ProfileScreen() {
 
                     <View style={styles.profileContent}>
                         <View style={styles.avatarRow}>
-                            <Image
-                                source={{ uri: 'https://github.com/shadcn.png' }} // Placeholder or user.avatar
-                                style={[styles.avatar, { borderColor: theme.card }]}
-                            />
+                            <TouchableOpacity
+                                onPress={() => router.push('/professional-docs')}
+                                activeOpacity={0.8}
+                                style={styles.avatarWrapper}
+                            >
+                                <Image
+                                    source={{ uri: userBadges?.avatar_url ? `${supabaseUrl}/storage/v1/object/public/avatars/${userBadges.avatar_url}` : 'https://github.com/shadcn.png' }}
+                                    style={[styles.avatar, { borderColor: theme.card }]}
+                                />
+                                <View style={styles.editPhotoBadge}>
+                                    <Camera size={12} color="white" />
+                                </View>
+                            </TouchableOpacity>
                             <View style={{ flex: 1, marginLeft: 16, paddingTop: 8 }}>
                                 <Text variant="h2">{/*user?.name ||*/ 'Dan Nuno'}</Text>
                                 <Text color={theme.textSecondary} style={{ marginBottom: 4 }}>Especialista en CCTV y Seguridad</Text>
@@ -50,6 +69,17 @@ export default function ProfileScreen() {
                                         <Text variant="caption" style={{ fontSize: 10 }}>ID: 158107</Text>
                                     </View>
                                 </View>
+
+                                {userBadges && (
+                                    <TouchableOpacity
+                                        onPress={() => router.push('/achievements')}
+                                        style={[styles.levelTag, { backgroundColor: currentLevelColor }]}
+                                    >
+                                        <Trophy size={12} color="white" />
+                                        <Text style={styles.levelTagText}>{currentLevelName}</Text>
+                                        <ChevronRight size={12} color="white" />
+                                    </TouchableOpacity>
+                                )}
                             </View>
                         </View>
 
@@ -67,7 +97,10 @@ export default function ProfileScreen() {
                                 <MapPin size={16} color={theme.primary} />
                                 <Text variant="caption" style={{ marginLeft: 6 }}>Mapa...</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#F59E0B' }]}>
+                            <TouchableOpacity
+                                onPress={() => router.push('/professional-id')}
+                                style={[styles.actionBtn, { backgroundColor: '#F59E0B' }]}
+                            >
                                 <FileText size={16} color="white" />
                                 <Text variant="caption" color="white" style={{ marginLeft: 6 }}>Identificac...</Text>
                             </TouchableOpacity>
@@ -77,14 +110,25 @@ export default function ProfileScreen() {
 
                 {/* Grid Menu */}
                 <View style={styles.menuGrid}>
-                    <TouchableOpacity style={[styles.menuItem, { backgroundColor: theme.card, borderColor: theme.primary, borderWidth: 1 }]}>
-                        <User size={24} color={theme.primary} />
+                    <TouchableOpacity onPress={() => router.push('/achievements')} style={[styles.menuItem, { backgroundColor: '#F5F3FF', borderColor: '#6D28D9', borderWidth: 1 }]}>
+                        <Trophy size={24} color="#6D28D9" />
+                        <Text weight="600" style={{ marginTop: 8, color: '#6D28D9' }}>Mis Logros</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity onPress={() => router.push('/portfolio')} style={[styles.menuItem, { backgroundColor: '#FFF7ED', borderColor: '#F59E0B', borderWidth: 1 }]}>
+                        <ImageIcon size={24} color="#F59E0B" />
+                        <Text weight="600" style={{ marginTop: 8, color: '#92400E' }}>Mi Portafolio</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity onPress={() => router.push('/professional-docs')} style={[styles.menuItem, { backgroundColor: theme.card, borderColor: theme.border, borderWidth: 1 }]}>
+                        <User size={24} color={theme.textSecondary} />
                         <Text weight="600" style={{ marginTop: 8 }}>Perfil Profesional</Text>
                     </TouchableOpacity>
 
-                    <TouchableOpacity onPress={() => router.push('/marketplace')} style={[styles.menuItem, { backgroundColor: theme.card, borderColor: theme.border, borderWidth: 1 }]}>
-                        <ShoppingBag size={24} color={theme.textSecondary} />
-                        <Text weight="600" style={{ marginTop: 8 }}>Tienda Sumee</Text>
+                    <TouchableOpacity onPress={() => router.push('/marketplace')} style={[styles.menuItem, { backgroundColor: '#F0F9FF', borderColor: '#0EA5E9', borderWidth: 1 }]}>
+                        <ShoppingBag size={24} color="#0EA5E9" />
+                        <Text weight="600" style={{ marginTop: 8, color: '#0369A1' }}>Marketplace</Text>
+                        <Text style={styles.marketplaceBadge}>Precio PRO</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity onPress={() => router.push('/bank-account')} style={[styles.menuItem, { backgroundColor: '#DCFCE7', borderColor: '#10B981', borderWidth: 1 }]}>
@@ -92,9 +136,20 @@ export default function ProfileScreen() {
                         <Text weight="600" style={{ marginTop: 8, color: '#065F46' }}>Datos Bancarios</Text>
                     </TouchableOpacity>
 
-                    <TouchableOpacity style={[styles.menuItem, { backgroundColor: theme.card, borderColor: theme.border, borderWidth: 1 }]}>
+                    <TouchableOpacity onPress={() => router.push('/help-center')} style={[styles.menuItem, { backgroundColor: theme.card, borderColor: theme.border, borderWidth: 1 }]}>
                         <HelpCircle size={24} color={theme.textSecondary} />
                         <Text weight="600" style={{ marginTop: 8 }}>Centro de Ayuda</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity onPress={() => router.push('/quote-generator')} style={[styles.menuItem, { backgroundColor: '#FDF2F8', borderColor: '#DB2777', borderWidth: 1 }]}>
+                        <Calculator size={24} color="#DB2777" />
+                        <Text weight="600" style={{ marginTop: 8, color: '#9D174D' }}>Nueva Cotización</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity onPress={() => router.push('/ai-diagnostic')} style={[styles.menuItem, { backgroundColor: '#F5F3FF', borderColor: '#7C3AED', borderWidth: 1 }]}>
+                        <Bot size={24} color="#7C3AED" />
+                        <Text weight="600" style={{ marginTop: 8, color: '#5B21B6' }}>Asistente IA</Text>
+                        <View style={styles.aiBadge}><Text style={styles.aiBadgeText}>PRO</Text></View>
                     </TouchableOpacity>
 
                     <TouchableOpacity onPress={handleLogout} style={[styles.menuItem, { backgroundColor: theme.card, borderColor: theme.border, borderWidth: 1 }]}>
@@ -154,11 +209,27 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         marginTop: -30,
     },
+    avatarWrapper: {
+        position: 'relative',
+    },
     avatar: {
         width: 80,
         height: 80,
         borderRadius: 40,
         borderWidth: 4,
+    },
+    editPhotoBadge: {
+        position: 'absolute',
+        bottom: 5,
+        right: 5,
+        backgroundColor: '#6D28D9',
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 2,
+        borderColor: 'white',
     },
     ratingRow: {
         flexDirection: 'row',
@@ -202,5 +273,47 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         marginBottom: 8,
+    },
+    levelTag: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        alignSelf: 'flex-start',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 20,
+        marginTop: 8,
+    },
+    levelTagText: {
+        color: 'white',
+        fontSize: 11,
+        fontWeight: 'bold',
+        marginHorizontal: 4,
+    },
+    marketplaceBadge: {
+        position: 'absolute',
+        top: 8,
+        right: 8,
+        backgroundColor: '#0EA5E9',
+        color: 'white',
+        fontSize: 8,
+        fontWeight: 'bold',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 8,
+        overflow: 'hidden',
+    },
+    aiBadge: {
+        position: 'absolute',
+        top: 8,
+        right: 8,
+        backgroundColor: '#7C3AED',
+        borderRadius: 8,
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+    },
+    aiBadgeText: {
+        color: 'white',
+        fontSize: 8,
+        fontWeight: 'bold',
     }
 });

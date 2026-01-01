@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "sumee-pro",
+    "name": "Sumee Pro",
     "slug": "sumee-pro",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -10,20 +10,57 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#6D28D9"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.sumeeapp.pro",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Sumee Pro necesita acceso a la cámara para capturar documentos de identidad y fotos de perfil.",
+        "NSLocationWhenInUseUsageDescription": "Tu ubicación se utiliza para mostrarte trabajos cercanos y guiarte al sitio del servicio.",
+        "NSPhotoLibraryUsageDescription": "Permite acceder a la galería para subir documentos de certificación."
+      }
     },
     "android": {
+      "package": "com.sumeeapp.pro",
+      "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#6D28D9"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "CAMERA",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "RECORD_AUDIO",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION"
+      ]
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Permite que Sumee Pro acceda a tus fotos para completar tu expediente."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Permite que Sumee Pro use tu ubicación para encontrarte trabajos relevantes incluso en segundo plano."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
     }
   }
 }

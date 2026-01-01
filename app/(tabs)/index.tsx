@@ -1,12 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, ScrollView, StyleSheet, Switch, TouchableOpacity, Dimensions, Platform, ActivityIndicator, Animated, PanResponder } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ScrollView, Dimensions, Switch, Alert, Platform, ActivityIndicator, Animated, PanResponder } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Text } from '@/components/Text';
 import { UniversalMap } from '@/components/UniversalMap';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { JobsService, Job } from '@/services/jobs';
-import { Bell, User, Zap, Shield, QrCode, MapPin, X, Check } from 'lucide-react-native';
+import {
+    Zap, MapPin, Search, Filter, Clock, Bell, User,
+    ChevronRight, Star, ArrowRight, Trophy, FileText, Shield, QrCode, X, Check
+} from 'lucide-react-native';
+import { BadgesService, UserBadges } from '@/services/badges';
+import { Skeleton } from '@/components/Skeleton';
+import ConfettiCannon from 'react-native-confetti-cannon';
+import { supabase } from '@/lib/supabase';
 
 const { width, height } = Dimensions.get('window');
 
@@ -133,61 +140,132 @@ export default function HomeScreen() {
     const [currentJobIndex, setCurrentJobIndex] = useState(0);
     const [isOnline, setIsOnline] = useState(true);
     const [loading, setLoading] = useState(true);
+    const [userBadges, setUserBadges] = useState<UserBadges | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [showConfetti, setShowConfetti] = useState(false);
+    const [bypassVerification, setBypassVerification] = useState(false);
 
     // Default location (Mexico City)
     const defaultLocation = { latitude: 19.4326, longitude: -99.1332 };
 
     useEffect(() => {
         loadData();
+        BadgesService.getUserBadges('me').then(setUserBadges);
+    }, []);
 
-        const subscription = JobsService.subscribeToJobs((payload) => {
-            console.log('New job update:', payload);
-            loadData();
-        });
+    const triggerCelebration = () => {
+        setShowConfetti(false);
+        setTimeout(() => setShowConfetti(true), 10);
+    };
 
+    const expedienteStatus = bypassVerification ? 'approved' : (userBadges?.expediente_status || 'not_uploaded');
+    const subscription = JobsService.subscribeToJobs((payload) => {
+        console.log('New job update:', payload);
+        loadData();
+    });
+
+    useEffect(() => {
         return () => {
             if (subscription && subscription.unsubscribe) {
                 subscription.unsubscribe();
             }
         };
-    }, []);
+    }, []); // Empty dependency array to run once on mount and cleanup on unmount
 
     const loadData = async () => {
+        setIsLoading(true);
         try {
-            const data = await JobsService.getJobs();
-            setJobs(data);
+            const fetchedJobs = await JobsService.getJobs();
+            setJobs(fetchedJobs);
+            setCurrentJobIndex(0);
         } catch (error) {
-            console.error(error);
+            console.error('Failed to load jobs:', error);
         } finally {
+            setIsLoading(false);
             setLoading(false);
         }
     };
 
-    const handleAcceptJob = async () => {
-        const job = jobs[currentJobIndex];
-        if (job) {
-            router.push({ pathname: '/job/[id]', params: { id: job.id } });
-        }
+    const nextJob = () => {
         setCurrentJobIndex(prev => prev + 1);
     };
 
+    const handleAccept = async () => {
+        const job = jobs[currentJobIndex];
+        if (!job || !user) return;
+
+        try {
+            const { error } = await JobsService.acceptJob(job.id, user.id);
+            if (error) {
+                Alert.alert('Error', 'No se pudo aceptar el trabajo. Intenta de nuevo.');
+                return;
+            }
+            triggerCelebration();
+            // In a real app, navigate to job details or active job view
+            Alert.alert('¡Éxito!', 'Misión aceptada. Ve a la pestaña de Trabajos para ver los detalles.');
+            nextJob();
+        } catch (e) {
+            console.error(e);
+            Alert.alert('Error', 'Ocurrió un problema al aceptar el trabajo.');
+        }
+    };
+
+    const handleAcceptJob = () => {
+        handleAccept();
+    };
+
     const handleRejectJob = () => {
-        setCurrentJobIndex(prev => prev + 1);
+        nextJob();
+    };
+
+    const handleSOS = async () => {
+        Alert.alert(
+            "🚨 ALERTA SOS",
+            "¿Estás en una situación de peligro? Esto enviará tu ubicación exacta a los administradores de Sumee para asistencia inmediata.",
+            [
+                { text: "Cancelar", style: "cancel" },
+                {
+                    text: "ENVIAR ALERTA",
+                    style: "destructive",
+                    onPress: async () => {
+                        const { error } = await supabase
+                            .from('admin_notifications')
+                            .insert({
+                                type: 'sos_alert',
+                                title: '🚨 EMERGENCIA: Profesional en Peligro',
+                                message: `El profesional ${user?.id} ha activado la alerta SOS.`,
+                                user_id: user?.id,
+                                metadata: {
+                                    lat: defaultLocation.latitude, // In real app, get current GPS
+                                    lng: defaultLocation.longitude,
+                                    phone: user?.phone,
+                                    timestamp: new Date().toISOString()
+                                }
+                            });
+
+                        if (error) {
+                            Alert.alert("Error", "No se pudo enviar la alerta. Llama al 911 si es una emergencia real.");
+                        } else {
+                            Alert.alert("Alerta Enviada", "Hemos recibido tu señal. Mantén la calma, estamos revisando tu ubicación.");
+                        }
+                    }
+                }
+            ]
+        );
     };
 
     const currentJob = jobs[currentJobIndex];
 
     if (loading) {
         return (
-            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: SUMEE_PURPLE_DARK }}>
-                <ActivityIndicator size="large" color="white" />
-                <Text style={{ marginTop: 20, color: 'white', fontWeight: 'bold' }}>Cargando Centro de Comando...</Text>
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                <Text>Cargando aplicación...</Text>
             </View>
         );
     }
 
     // Prepare markers from jobs
-    const jobMarkers = jobs.map(job => ({
+    const jobMarkers = jobs.map((job: any) => ({
         id: job.id,
         latitude: job.latitude || defaultLocation.latitude + (Math.random() - 0.5) * 0.02,
         longitude: job.longitude || defaultLocation.longitude + (Math.random() - 0.5) * 0.02,
@@ -223,7 +301,12 @@ export default function HomeScreen() {
                                 <Text style={{ fontWeight: 'bold', color: TEXT_DARK, fontSize: 16 }}>Dan Nuno</Text>
                                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                     <Text style={{ fontSize: 12, color: SUMEE_PURPLE, fontWeight: '600' }}>⭐ 4.9</Text>
-                                    <Text style={{ fontSize: 12, color: '#9CA3AF', marginLeft: 8 }}>PRO</Text>
+                                    {userBadges && (
+                                        <View style={[styles.miniLevelBadge, { backgroundColor: BadgesService.getLevelColor(userBadges.currentLevel) }]}>
+                                            <Trophy size={8} color="white" />
+                                            <Text style={styles.miniLevelText}>{BadgesService.getLevelName(userBadges.currentLevel)}</Text>
+                                        </View>
+                                    )}
                                 </View>
                             </View>
                         </TouchableOpacity>
@@ -253,17 +336,76 @@ export default function HomeScreen() {
 
             {/* FABs */}
             <View style={styles.fabContainer}>
-                <TouchableOpacity style={styles.fab}>
+                <TouchableOpacity
+                    style={styles.fab}
+                    onPress={() => router.push('/profile')} // Quick access to profile/QR
+                >
                     <QrCode size={24} color="white" />
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.fab, { backgroundColor: '#EF4444', marginTop: 12 }]}>
+                <TouchableOpacity
+                    style={[styles.fab, { backgroundColor: '#EF4444', marginTop: 12 }]}
+                    onPress={handleSOS}
+                >
                     <Shield size={24} color="white" />
                 </TouchableOpacity>
             </View>
 
             {/* TINDER-STYLE LEAD CARDS */}
-            <View style={styles.cardContainer}>
-                {isOnline ? (
+            {/* Conditional Overlay for Verification */}
+            {expedienteStatus !== 'approved' && (
+                <View style={styles.verificationOverlay}>
+                    <View style={styles.verificationCard}>
+                        {expedienteStatus === 'not_uploaded' ? (
+                            <>
+                                <FileText size={48} color={theme.primary} />
+                                <Text variant="h2" style={styles.vTitle}>Expediente Incompleto</Text>
+                                <Text style={styles.vDesc}>Para comenzar a recibir trabajos y ganar puntos, debes subir tu documentación oficial.</Text>
+                                <TouchableOpacity
+                                    onPress={() => router.push('/professional-docs')}
+                                    style={{ width: '100%', marginTop: 10, backgroundColor: SUMEE_PURPLE, paddingVertical: 12, borderRadius: 24, alignItems: 'center' }}
+                                >
+                                    <Text style={{ color: 'white', fontWeight: 'bold' }}>Subir Documentos</Text>
+                                </TouchableOpacity>
+
+                                {/* Botón Temporal de Debug */}
+                                <TouchableOpacity
+                                    onPress={() => {
+                                        setBypassVerification(true);
+                                        triggerCelebration();
+                                    }}
+                                    style={{ marginTop: 20 }}
+                                >
+                                    <Text style={{ color: theme.primary, fontSize: 12, opacity: 0.5 }}>[ DEBUG: Simular Aprobación ]</Text>
+                                </TouchableOpacity>
+                            </>
+                        ) : (
+                            <>
+                                <Clock size={48} color="#EAB308" />
+                                <Text variant="h2" style={styles.vTitle}>Validación en Progreso</Text>
+                                <Text style={styles.vDesc}>Estamos revisando tus documentos. Te notificaremos por WhatsApp en cuanto seas aprobado.</Text>
+                                <View style={styles.statusBadgePending}>
+                                    <Text style={styles.statusTextPending}>Pendiente de Aprobación</Text>
+                                </View>
+                            </>
+                        )}
+                    </View>
+                </View>
+            )}
+
+            <ScrollView contentContainerStyle={styles.scrollContent}>
+                {isLoading ? (
+                    <View style={styles.cardStack}>
+                        <View style={styles.skeletonCard}>
+                            <Skeleton height={200} borderRadius={24} style={{ marginBottom: 16 }} />
+                            <Skeleton width="60%" height={24} style={{ marginBottom: 8 }} />
+                            <Skeleton width="40%" height={16} style={{ marginBottom: 20 }} />
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                                <Skeleton width="30%" height={40} borderRadius={20} />
+                                <Skeleton width="30%" height={40} borderRadius={20} />
+                            </View>
+                        </View>
+                    </View>
+                ) : isOnline ? (
                     currentJob ? (
                         <View style={styles.cardStack}>
                             <Text style={styles.sectionTitle}>⚡ Nueva Chamba Disponible</Text>
@@ -307,7 +449,16 @@ export default function HomeScreen() {
                         </TouchableOpacity>
                     </View>
                 )}
-            </View>
+            </ScrollView>
+
+            {showConfetti && (
+                <ConfettiCannon
+                    count={200}
+                    origin={{ x: width / 2, y: -20 }}
+                    fadeOut={true}
+                    onAnimationEnd={() => setShowConfetti(false)}
+                />
+            )}
         </View>
     );
 }
@@ -317,6 +468,11 @@ const styles = StyleSheet.create({
     mapBackground: {
         ...StyleSheet.absoluteFillObject,
         height: '100%',
+    },
+    scrollContent: {
+        flexGrow: 1,
+        justifyContent: 'flex-end',
+        paddingBottom: 30, // Ensure content doesn't get cut off by bottom padding
     },
     // HUD
     hudContainer: { position: 'absolute', top: Platform.OS === 'ios' ? 60 : Platform.OS === 'web' ? 20 : 40, left: 20, right: 20, zIndex: 10 },
@@ -331,7 +487,7 @@ const styles = StyleSheet.create({
     fabContainer: { position: 'absolute', right: 20, top: Platform.OS === 'web' ? 180 : 220, zIndex: 10 },
     fab: { width: 56, height: 56, borderRadius: 28, backgroundColor: TEXT_DARK, alignItems: 'center', justifyContent: 'center', shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 4.65, elevation: 8 },
     // Card Stack
-    cardContainer: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingBottom: 30 },
+    cardContainer: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingBottom: 30 }, // This is now redundant as content is in ScrollView
     cardStack: { paddingHorizontal: 20 },
     sectionTitle: { fontSize: 18, fontWeight: 'bold', color: TEXT_DARK, marginBottom: 12, textShadowColor: 'rgba(255,255,255,0.8)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
     // Swipeable Card
@@ -346,4 +502,66 @@ const styles = StyleSheet.create({
     // States
     radarContainer: { height: 200, backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, alignItems: 'center', justifyContent: 'center', padding: 20, marginHorizontal: 20, borderRadius: 24, shadowColor: "#000", shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 10 },
     offlineContainer: { height: 160, backgroundColor: 'white', borderRadius: 24, marginHorizontal: 20, alignItems: 'center', justifyContent: 'center', padding: 24, shadowColor: "#000", shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.1, shadowRadius: 8 },
+    miniLevelBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 10,
+        marginLeft: 8,
+    },
+    miniLevelText: {
+        color: 'white',
+        fontSize: 9,
+        fontWeight: 'bold',
+        marginLeft: 4,
+    },
+    verificationOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(255, 255, 255, 0.8)',
+        zIndex: 100,
+        justifyContent: 'center',
+        padding: 24,
+    },
+    verificationCard: {
+        alignItems: 'center',
+        padding: 30,
+        backgroundColor: 'white',
+        elevation: 10,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 10,
+        borderRadius: 24, // Added for consistency with other cards
+    },
+    vTitle: {
+        marginTop: 20,
+        marginBottom: 10,
+        textAlign: 'center',
+    },
+    vDesc: {
+        textAlign: 'center',
+        color: '#64748B',
+        marginBottom: 20,
+        lineHeight: 20,
+    },
+    statusBadgePending: {
+        backgroundColor: '#FEF9C3',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: '#EAB308',
+    },
+    statusTextPending: {
+        color: '#854D0E',
+        fontSize: 12,
+        fontWeight: 'bold',
+    },
+    skeletonCard: {
+        backgroundColor: 'rgba(255,255,255,0.7)',
+        borderRadius: 24,
+        padding: 20,
+        height: 380,
+    }
 });

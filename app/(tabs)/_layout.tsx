@@ -1,9 +1,18 @@
 import { Tabs } from 'expo-router';
+import { useEffect } from 'react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Home, Briefcase, Calendar, DollarSign, User } from 'lucide-react-native';
+import { NotificationsService } from '@/services/notifications';
 
 export default function TabsLayout() {
     const { theme } = useTheme();
+
+    useEffect(() => {
+        const cleanup = NotificationsService.setupListeners((notification) => {
+            console.log('Notification received in foreground:', notification.request.content.title);
+        });
+        return cleanup;
+    }, []);
 
     return (
         <Tabs
