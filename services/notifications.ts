@@ -76,6 +76,22 @@ export const NotificationsService = {
     },
 
     /**
+     * Trigger a local notification immediately
+     */
+    async triggerLocalNotification(title: string, body: string, data: any = {}) {
+        await Notifications.scheduleNotificationAsync({
+            content: {
+                title,
+                body,
+                data,
+                sound: true,
+                priority: Notifications.AndroidNotificationPriority.MAX,
+            },
+            trigger: null, // trigger now
+        });
+    },
+
+    /**
      * Setup listeners for notification events
      */
     setupListeners(onNotification: (notification: Notifications.Notification) => void) {
@@ -84,6 +100,16 @@ export const NotificationsService = {
             // Handle when user taps on the notification
             console.log('Notification tapped:', response.notification.request.content.data);
         });
+
+        if (Platform.OS === 'android') {
+            Notifications.setNotificationChannelAsync('leads-alerts', {
+                name: 'Nuevos Trabajos',
+                importance: Notifications.AndroidImportance.MAX,
+                vibrationPattern: [0, 250, 250, 250],
+                lightColor: '#6D28D9',
+                sound: 'default', // Can be customized if file is bundled
+            });
+        }
 
         return () => {
             notificationListener.remove();

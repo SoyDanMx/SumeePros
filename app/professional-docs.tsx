@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, Image, Alert, ActivityIndicator, Dimensions } from 'react-native';
 import { Screen } from '@/components/Screen';
 import { Text } from '@/components/Text';
@@ -13,8 +13,7 @@ import {
 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
-import * as Print from 'expo-print';
-import * as Sharing from 'expo-sharing';
+import * as DocumentPicker from 'expo-document-picker';
 import { supabase } from '@/lib/supabase';
 
 const { width } = Dimensions.get('window');
@@ -23,7 +22,9 @@ interface DocFile {
     id: string;
     label: string;
     description: string;
-    uri: string | null;
+    uris: string[]; // Changed to array
+    type: 'single' | 'multiple';
+    allowedTypes: ('image' | 'pdf')[];
 }
 
 export default function ProfessionalDocsScreen() {
@@ -33,13 +34,70 @@ export default function ProfessionalDocsScreen() {
     const [loading, setLoading] = useState(false);
 
     const [docs, setDocs] = useState<DocFile[]>([
-        { id: 'profile_photo', label: 'Foto de Perfil', description: 'Foto clara de tu rostro (estilo credencial)', uri: null },
-        { id: 'ine_front', label: 'INE (Frente)', description: 'Identificación oficial vigente', uri: null },
-        { id: 'ine_back', label: 'INE (Vuelta)', description: 'Parte posterior de tu identificación', uri: null },
-        { id: 'cv', label: 'Curriculum Vitae', description: 'Tu experiencia laboral actualizada', uri: null },
-        { id: 'no_penales', label: 'Antecedentes No Penales', description: 'Constancia oficial (máx 3 meses)', uri: null },
-        { id: 'certificaciones', label: 'Certificaciones/Diplomas', description: 'Títulos o cursos que avalen tu oficio', uri: null },
+        { id: 'profile_photo', label: 'Foto de Perfil', description: 'Foto clara de tu rostro', uris: [], type: 'single', allowedTypes: ['image'] },
+        { id: 'ine_front', label: 'INE (Frente)', description: 'Identificación oficial frontal', uris: [], type: 'single', allowedTypes: ['image'] },
+        { id: 'ine_back', label: 'INE (Vuelta)', description: 'Identificación oficial posterior', uris: [], type: 'single', allowedTypes: ['image'] },
+        { id: 'cv', label: 'Curriculum Vitae', description: 'Experiencia laboral (Fotos o PDF)', uris: [], type: 'multiple', allowedTypes: ['image', 'pdf'] },
+        { id: 'no_penales', label: 'Antecedentes No Penales', description: 'Constancia oficial (Fotos o PDF)', uris: [], type: 'multiple', allowedTypes: ['image', 'pdf'] },
+        { id: 'certificaciones', label: 'Certificaciones/Diplomas', description: 'Diplomas y cursos (Fotos o PDF)', uris: [], type: 'multiple', allowedTypes: ['image', 'pdf'] },
     ]);
+
+    useEffect(() => {
+        if (user) {
+            loadExistingDocs();
+        }
+    }, [user]);
+
+    const loadExistingDocs = async () => {
+        try {
+            const { data, error } = await supabase
+                .from('professional_stats')
+                .select('expediente_data')
+                .eq('user_id', user?.id)
+                .single();
+
+            if (data?.expediente_data) {
+                const remoteData = data.expediente_data as Record<string, string[]>;
+                setDocs(prev => prev.map(doc => {
+                    if (remoteData[doc.id]) {
+                        // We store paths, need to convert to public URLs for display
+                        const publicUris = remoteData[doc.id].map(path => {
+                            if (path.startsWith('http')) return path;
+                            return `${process.env.EXPO_PUBLIC_SUPABASE_URL}/storage/v1/object/public/sumee-expedientes/${path}`;
+                        });
+                        return { ...doc, uris: publicUris };
+                    }
+                    return doc;
+                }));
+            }
+        } catch (err) {
+            console.error('Error loading existing docs:', err);
+        }
+    };
+
+    const handlePickFile = async (docId: string) => {
+        try {
+            const result = await DocumentPicker.getDocumentAsync({
+                type: ['application/pdf', 'image/*'],
+                multiple: true
+            });
+
+            if (!result.canceled) {
+                const newUris = result.assets.map(a => a.uri);
+                setDocs(prev => prev.map(d => {
+                    if (d.id === docId) {
+                        return {
+                            ...d,
+                            uris: d.type === 'single' ? [newUris[0]] : [...d.uris, ...newUris]
+                        };
+                    }
+                    return d;
+                }));
+            }
+        } catch (err) {
+            console.error('Error picking document:', err);
+        }
+    };
 
     const handleCapture = async (docId: string) => {
         const { status } = await ImagePicker.requestCameraPermissionsAsync();
@@ -55,11 +113,11 @@ export default function ProfessionalDocsScreen() {
         });
 
         if (!result.canceled) {
-            updateDocUri(docId, result.assets[0].uri);
+            addDocUri(docId, result.assets[0].uri);
         }
     };
 
-    const handlePick = async (docId: string) => {
+    const handlePickImage = async (docId: string) => {
         const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
             allowsEditing: true,
@@ -67,149 +125,118 @@ export default function ProfessionalDocsScreen() {
         });
 
         if (!result.canceled) {
-            updateDocUri(docId, result.assets[0].uri);
+            addDocUri(docId, result.assets[0].uri);
         }
     };
 
-    const updateDocUri = (id: string, uri: string) => {
-        setDocs(prev => prev.map(d => d.id === id ? { ...d, uri } : d));
+    const addDocUri = (id: string, uri: string) => {
+        setDocs(prev => prev.map(d => {
+            if (d.id === id) {
+                return {
+                    ...d,
+                    uris: d.type === 'single' ? [uri] : [...d.uris, uri]
+                };
+            }
+            return d;
+        }));
     };
 
-    const removeDoc = (id: string) => {
-        setDocs(prev => prev.map(d => d.id === id ? { ...d, uri: null } : d));
+    const removeDocUri = (id: string, uriToRemove: string) => {
+        setDocs(prev => prev.map(d => d.id === id ? { ...d, uris: d.uris.filter(u => u !== uriToRemove) } : d));
     };
 
     const generateAndUploadExpediente = async () => {
-        const missing = docs.filter(d => !d.uri);
-        if (missing.length > 0) {
-            Alert.alert('Expediente Incompleto', `Faltan documentos: ${missing.map(m => m.label).join(', ')}`);
+        // Validation: Only require profile photo and INE
+        const mandatoryIds = ['profile_photo', 'ine_front', 'ine_back'];
+        const missingMandatory = docs.filter(d => mandatoryIds.includes(d.id) && d.uris.length === 0);
+
+        if (missingMandatory.length > 0) {
+            Alert.alert(
+                'Documentos Mínimos Requeridos',
+                `Para activarte necesitamos al menos: ${missingMandatory.map(m => m.label).join(', ')}. El resto puedes subirlos después.`
+            );
             return;
         }
 
         setLoading(true);
         try {
-            // 1. Create HTML for the PDF
-            // We convert internal URIs to Base64 to include them in the PDF
-            let imagesHtml = '';
+            const uploadedData: Record<string, string[]> = {};
+
+            // Helper to upload a single file
+            const uploadFile = async (uri: string, category: string, index: number) => {
+                // If it's already a remote URL, don't re-upload
+                if (uri.startsWith('http')) {
+                    const match = uri.match(/sumee-expedientes\/(.+)$/);
+                    return match ? match[1] : uri;
+                }
+
+                const extension = uri.toLowerCase().endsWith('.pdf') ? 'pdf' : 'jpg';
+                const fileName = `${category}_${index}_${Date.now()}.${extension}`;
+                const filePath = `${user?.id}/${fileName}`; // simplified path
+
+                const base64 = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' });
+                const arrayBuffer = decode(base64);
+
+                const { data, error } = await supabase.storage
+                    .from('sumee-expedientes')
+                    .upload(filePath, arrayBuffer, {
+                        contentType: extension === 'pdf' ? 'application/pdf' : 'image/jpeg',
+                        upsert: true
+                    });
+
+                if (error) throw error;
+                return filePath;
+            };
+
+            // Process all docs
             for (const doc of docs) {
-                if (doc.uri) {
-                    const base64 = await FileSystem.readAsStringAsync(doc.uri, { encoding: 'base64' });
-                    imagesHtml += `
-                        <div style="page-break-after: always; text-align: center; padding: 20px; position: relative;">
-                            <h2 style="color: #6D28D9; font-family: sans-serif; margin-bottom: 20px;">${doc.label}</h2>
-                            <div style="position: relative; display: inline-block;">
-                                <img src="data:image/jpeg;base64,${base64}" style="max-width: 100%; border: 1px solid #ddd; border-radius: 8px;" />
-                                <!-- Digital Watermark -->
-                                <div style="
-                                    position: absolute; 
-                                    top: 50%; 
-                                    left: 50%; 
-                                    transform: translate(-50%, -50%) rotate(-45deg);
-                                    color: rgba(109, 40, 217, 0.2);
-                                    font-size: 40px;
-                                    font-family: sans-serif;
-                                    font-weight: bold;
-                                    text-align: center;
-                                    pointer-events: none;
-                                    width: 100%;
-                                    border: 4px solid rgba(109, 40, 217, 0.2);
-                                    padding: 20px;
-                                    text-transform: uppercase;
-                                    letter-spacing: 5px;
-                                    white-space: nowrap;
-                                ">
-                                    USO EXCLUSIVO SUMEE PRO<br/>
-                                    ID: ${user?.id?.substring(0, 8)}<br/>
-                                    ${new Date().toLocaleDateString()}
-                                </div>
-                            </div>
-                            <p style="color: #94A3B8; font-family: sans-serif; margin-top: 15px; font-size: 12px;">Validado digitalmente por Sumee Pro Security System</p>
-                        </div>
-                    `;
+                if (doc.uris.length > 0) {
+                    const paths = [];
+                    for (let i = 0; i < doc.uris.length; i++) {
+                        const path = await uploadFile(doc.uris[i], doc.id, i);
+                        paths.push(path);
+                    }
+                    uploadedData[doc.id] = paths;
                 }
             }
 
-            const html = `
-                <html>
-                    <body style="margin: 0; padding: 0;">
-                        <h1 style="text-align: center; color: #6D28D9; padding-top: 50px; font-family: sans-serif;">EXPEDIENTE DIGITAL SUMEE PRO</h1>
-                        <p style="text-align: center; font-family: sans-serif;">Documentación Unificada del Profesional</p>
-                        ${imagesHtml}
-                    </body>
-                </html>
-            `;
+            // Update Professional Stats with JSON data
+            const avatarPath = uploadedData['profile_photo'] ? uploadedData['profile_photo'][0] : null;
 
-            // 2. Generate PDF
-            const { uri } = await Print.printToFileAsync({ html });
-
-            // 3. Upload to Supabase Storage
-            const fileName = `expediente_${Date.now()}.pdf`;
-            const filePath = `professional-docs/${fileName}`;
-
-            const base64Pdf = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' });
-            const arrayBuffer = decode(base64Pdf);
-
-            const { data, error } = await supabase.storage
-                .from('sumee-expedientes')
-                .upload(filePath, arrayBuffer, {
-                    contentType: 'application/pdf',
-                });
-
-            if (error) throw error;
-
-            // 4. Create Notification for Administrator
-            const { error: notifyError } = await supabase
-                .from('admin_notifications')
-                .insert({
-                    type: 'new_expediente',
-                    title: 'Nuevo Expediente para Validar',
-                    message: `El profesional con ID ${user?.id} ha subido su expediente unificado.`,
-                    user_id: user?.id,
-                    metadata: {
-                        file_path: filePath,
-                        file_name: fileName,
-                        uploaded_at: new Date().toISOString()
-                    }
-                });
-
-            if (notifyError) console.error('Notification Error:', notifyError);
-
-            // 5. Specifically handle Profile Photo for the UI
-            let avatarUrl = null;
-            const profilePhotoDoc = docs.find(d => d.id === 'profile_photo');
-            if (profilePhotoDoc?.uri) {
-                const photoName = `avatar_${user?.id}_${Date.now()}.jpg`;
-                const photoB64 = await FileSystem.readAsStringAsync(profilePhotoDoc.uri, { encoding: 'base64' });
-                const photoBuffer = decode(photoB64);
-
-                const { data: photoData } = await supabase.storage
-                    .from('avatars')
-                    .upload(photoName, photoBuffer, { contentType: 'image/jpeg' });
-
-                if (photoData) avatarUrl = photoData.path;
-            }
-
-            // 6. Update Professional Stats Status
-            await supabase
+            const { error: updateError } = await supabase
                 .from('professional_stats')
                 .update({
-                    expediente_status: 'pending_approval',
-                    expediente_pdf_url: filePath,
-                    avatar_url: avatarUrl || undefined
+                    expediente_status: 'approved', // Auto-approve to allow immediate activity with Photo + INE
+                    expediente_data: uploadedData,
+                    avatar_url: avatarPath || undefined,
+                    updated_at: new Date().toISOString()
                 })
                 .eq('user_id', user?.id);
 
+            if (updateError) throw updateError;
+
+            // Notify Admin
+            await supabase
+                .from('admin_notifications')
+                .insert({
+                    type: 'new_expediente',
+                    title: 'Nuevo Expediente (Parcial/Completo)',
+                    message: `El profesional ${user?.id} ha actualizado su expediente.`,
+                    user_id: user?.id,
+                    metadata: {
+                        categories: Object.keys(uploadedData)
+                    }
+                });
+
             Alert.alert(
-                '¡Éxito!',
-                'Tu expediente unificado PDF ha sido guardado exitosamente en Sumee.',
-                [
-                    { text: 'Ver PDF', onPress: () => Sharing.shareAsync(uri) },
-                    { text: 'OK', onPress: () => router.back() }
-                ]
+                '¡Expediente Guardado!',
+                'Tus documentos se han subido correctamente. Ya puedes comenzar a usar la plataforma mientras validamos el resto.',
+                [{ text: 'Entendido', onPress: () => router.back() }]
             );
+
         } catch (error: any) {
             console.error('Upload Error:', error);
-            Alert.alert('Error', 'No se pudo generar o subir el expediente. Verifica tu conexión.');
+            Alert.alert('Error', 'No se pudieron subir los documentos. Valida tu conexión a internet.');
         } finally {
             setLoading(false);
         }
@@ -250,34 +277,56 @@ export default function ProfessionalDocsScreen() {
                 {docs.map((doc) => (
                     <Card key={doc.id} style={styles.docCard}>
                         <View style={styles.docInfo}>
-                            <View style={[styles.iconBox, { backgroundColor: doc.uri ? '#DCFCE7' : '#F1F5F9' }]}>
-                                {doc.uri ? <CheckCircle2 size={24} color="#10B981" /> : <FileText size={24} color="#94A3B8" />}
+                            <View style={[styles.iconBox, { backgroundColor: doc.uris.length > 0 ? '#DCFCE7' : '#F1F5F9' }]}>
+                                {doc.uris.length > 0 ? <CheckCircle2 size={24} color="#10B981" /> : <FileText size={24} color="#94A3B8" />}
                             </View>
                             <View style={{ flex: 1, marginLeft: 12 }}>
-                                <Text weight="bold" style={{ fontSize: 16 }}>{doc.label}</Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                    <Text weight="bold" style={{ fontSize: 16 }}>{doc.label}</Text>
+                                    {['profile_photo', 'ine_front', 'ine_back'].includes(doc.id) && (
+                                        <Text style={{ color: '#EF4444', marginLeft: 4 }}>*</Text>
+                                    )}
+                                </View>
                                 <Text variant="caption" color={theme.textSecondary}>{doc.description}</Text>
                             </View>
                         </View>
 
-                        {doc.uri ? (
-                            <View style={styles.previewContainer}>
-                                <Image source={{ uri: doc.uri }} style={styles.preview} />
-                                <TouchableOpacity style={styles.removeBtn} onPress={() => removeDoc(doc.id)}>
-                                    <Trash2 size={16} color="white" />
-                                </TouchableOpacity>
-                            </View>
-                        ) : (
-                            <View style={styles.btnRow}>
-                                <TouchableOpacity style={styles.actionBtn} onPress={() => handleCapture(doc.id)}>
-                                    <Camera size={20} color={theme.primary} />
-                                    <Text style={styles.btnLabel}>Cámara</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity style={styles.actionBtn} onPress={() => handlePick(doc.id)}>
-                                    <UploadCloud size={20} color={theme.primary} />
-                                    <Text style={styles.btnLabel}>Galería</Text>
-                                </TouchableOpacity>
-                            </View>
+                        {doc.uris.length > 0 && (
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalPreviews}>
+                                {doc.uris.map((uri, idx) => (
+                                    <View key={idx} style={styles.previewContainer}>
+                                        {uri.toLowerCase().endsWith('.pdf') ? (
+                                            <View style={[styles.preview, { backgroundColor: '#FEE2E2', justifyContent: 'center', alignItems: 'center' }]}>
+                                                <FileText size={40} color="#EF4444" />
+                                                <Text variant="caption" color="#EF4444">PDF</Text>
+                                            </View>
+                                        ) : (
+                                            <Image source={{ uri }} style={styles.preview} />
+                                        )}
+                                        <TouchableOpacity style={styles.removeBtn} onPress={() => removeDocUri(doc.id, uri)}>
+                                            <Trash2 size={12} color="white" />
+                                        </TouchableOpacity>
+                                    </View>
+                                ))}
+                            </ScrollView>
                         )}
+
+                        <View style={styles.btnRow}>
+                            <TouchableOpacity style={styles.actionBtn} onPress={() => handleCapture(doc.id)}>
+                                <Camera size={18} color={theme.primary} />
+                                <Text style={styles.btnLabel}>Cámara</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.actionBtn} onPress={() => handlePickImage(doc.id)}>
+                                <UploadCloud size={18} color={theme.primary} />
+                                <Text style={styles.btnLabel}>Fotos</Text>
+                            </TouchableOpacity>
+                            {doc.allowedTypes.includes('pdf') && (
+                                <TouchableOpacity style={styles.actionBtn} onPress={() => handlePickFile(doc.id)}>
+                                    <FileText size={18} color={theme.primary} />
+                                    <Text style={styles.btnLabel}>PDF</Text>
+                                </TouchableOpacity>
+                            )}
+                        </View>
                     </Card>
                 ))}
 
@@ -367,12 +416,18 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         color: '#475569',
     },
+    horizontalPreviews: {
+        marginBottom: 16,
+    },
     previewContainer: {
-        height: 150,
-        width: '100%',
+        height: 100,
+        width: 100,
         borderRadius: 12,
         overflow: 'hidden',
         position: 'relative',
+        marginRight: 10,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
     },
     preview: {
         width: '100%',
@@ -380,11 +435,11 @@ const styles = StyleSheet.create({
     },
     removeBtn: {
         position: 'absolute',
-        top: 10,
-        right: 10,
+        top: 5,
+        right: 5,
         backgroundColor: 'rgba(239, 68, 68, 0.9)',
-        padding: 8,
-        borderRadius: 20,
+        padding: 4,
+        borderRadius: 12,
     },
     disclaimer: {
         textAlign: 'center',

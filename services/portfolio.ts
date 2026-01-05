@@ -4,6 +4,7 @@ export interface PortfolioItem {
     id: string;
     user_id: string;
     image_url: string;
+    title: string;
     description: string;
     created_at: string;
 }
@@ -24,12 +25,13 @@ export const PortfolioService = {
         return data || [];
     },
 
-    async addPortfolioItem(userId: string, imageUrl: string, description: string): Promise<PortfolioItem | null> {
+    async addPortfolioItem(userId: string, imageUrl: string, title: string, description: string = ''): Promise<PortfolioItem | null> {
         const { data, error } = await supabase
             .from('portfolio_items')
             .insert({
                 user_id: userId,
                 image_url: imageUrl,
+                title: title,
                 description: description
             })
             .select()

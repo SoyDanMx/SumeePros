@@ -25,7 +25,7 @@ export const JobsService = {
     async getJobs(): Promise<Job[]> {
         try {
             const { data, error } = await supabase
-                .from('jobs')
+                .from('leads')
                 .select('*')
                 .eq('status', 'pending')
                 .order('created_at', { ascending: false });
@@ -44,15 +44,15 @@ export const JobsService = {
 
     subscribeToJobs(callback: (payload: any) => void) {
         return supabase
-            .channel('public:jobs')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'jobs' }, callback)
+            .channel('public:leads')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, callback)
             .subscribe();
     },
 
     async acceptJob(jobId: string, userId: string) {
         try {
             const { data, error } = await supabase
-                .from('jobs')
+                .from('leads')
                 .update({
                     status: 'accepted',
                     professional_id: userId,
@@ -72,7 +72,7 @@ export const JobsService = {
     async completeJob(jobId: string, userId: string) {
         try {
             const { data, error } = await supabase
-                .from('jobs')
+                .from('leads')
                 .update({
                     status: 'completed',
                 })
@@ -91,7 +91,7 @@ export const JobsService = {
     async getJobById(jobId: string): Promise<Job | null> {
         try {
             const { data, error } = await supabase
-                .from('jobs')
+                .from('leads')
                 .select('*')
                 .eq('id', jobId)
                 .single();
@@ -100,6 +100,26 @@ export const JobsService = {
             return data as Job;
         } catch {
             return null;
+        }
+    },
+
+    async getEarningsToday(userId: string): Promise<number> {
+        try {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            const { data, error } = await supabase
+                .from('leads')
+                .select('price')
+                .eq('professional_id', userId)
+                .eq('status', 'completed')
+                .gte('created_at', today.toISOString()); // Using created_at since updated_at might not exist yet
+
+            if (error || !data) return 0;
+            return data.reduce((acc, item) => acc + (Number(item.price) || 0), 0);
+        } catch (error) {
+            console.error('[JobsService] Earnings error:', error);
+            return 0;
         }
     }
 };

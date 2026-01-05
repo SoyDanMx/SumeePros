@@ -30,31 +30,23 @@ const INPUT_BORDER = '#D1D5DB';
 
 export default function LoginScreen() {
     const router = useRouter();
-    const [phone, setPhone] = useState('');
-    const [otp, setOtp] = useState('');
-    const [step, setStep] = useState<'phone' | 'otp'>('phone');
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
-    const { signInWithPhone, verifyOtp } = useAuth();
+    const { signInWithEmail } = useAuth();
 
-    const handleSendOtp = async () => {
-        if (!phone) return;
-        setLoading(true);
-        const { error } = await signInWithPhone(phone);
-        setLoading(false);
-        if (error) {
-            Alert.alert('Error', error.message);
-        } else {
-            setStep('otp');
+    const handleLogin = async () => {
+        if (!email || !password) {
+            Alert.alert('Datos incompletos', 'Por favor ingresa tu correo y contraseña.');
+            return;
         }
-    };
 
-    const handleVerifyOtp = async () => {
-        if (!otp) return;
         setLoading(true);
-        const { error } = await verifyOtp(phone, otp);
+        const { error } = await signInWithEmail(email, password);
         setLoading(false);
+
         if (error) {
-            Alert.alert('Error', 'Código inválido o expirado.');
+            Alert.alert('Error de Acceso', error.message || 'Credenciales incorrectas o no tienes permiso de profesional.');
         } else {
             router.replace('/(tabs)');
         }
@@ -80,65 +72,50 @@ export default function LoginScreen() {
                                     style={styles.logo}
                                     resizeMode="contain"
                                 />
-                                <Text style={styles.title}>Bienvenido de Nuevo</Text>
-                                <Text style={styles.subtitle}>Inicia sesión para continuar.</Text>
+                                <Text style={styles.title}>Sumee Pro</Text>
+                                <Text style={styles.subtitle}>Acceso exclusivo para profesionales.</Text>
                             </View>
 
                             {/* Form Section */}
                             <View style={styles.formContainer}>
-                                {step === 'phone' ? (
-                                    <>
-                                        <View style={styles.inputGroup}>
-                                            <Text style={styles.label}>Número de Teléfono</Text>
-                                            <View style={styles.inputWrapper}>
-                                                <Phone size={20} color={TEXT_GRAY} style={styles.inputIcon} />
-                                                <TextInput
-                                                    style={styles.input}
-                                                    placeholder="55 1234 5678"
-                                                    placeholderTextColor="#9CA3AF"
-                                                    value={phone}
-                                                    onChangeText={setPhone}
-                                                    keyboardType="phone-pad"
-                                                />
-                                            </View>
-                                        </View>
-                                        <Button
-                                            title={loading ? "Enviando..." : "Enviar Código OTP"}
-                                            onPress={handleSendOtp}
-                                            loading={loading}
-                                            disabled={!phone}
-                                            style={styles.loginButton}
+                                <View style={styles.inputGroup}>
+                                    <Text style={styles.label}>Correo Electrónico</Text>
+                                    <View style={styles.inputWrapper}>
+                                        <Mail size={20} color={TEXT_GRAY} style={styles.inputIcon} />
+                                        <TextInput
+                                            style={styles.input}
+                                            placeholder="pro@sumee.mx"
+                                            placeholderTextColor="#9CA3AF"
+                                            value={email}
+                                            onChangeText={setEmail}
+                                            keyboardType="email-address"
+                                            autoCapitalize="none"
                                         />
-                                    </>
-                                ) : (
-                                    <>
-                                        <View style={styles.inputGroup}>
-                                            <Text style={styles.label}>Código de Verificación</Text>
-                                            <View style={styles.inputWrapper}>
-                                                <Lock size={20} color={TEXT_GRAY} style={styles.inputIcon} />
-                                                <TextInput
-                                                    style={styles.input}
-                                                    placeholder="123456"
-                                                    placeholderTextColor="#9CA3AF"
-                                                    value={otp}
-                                                    onChangeText={setOtp}
-                                                    keyboardType="number-pad"
-                                                    maxLength={6}
-                                                />
-                                            </View>
-                                        </View>
-                                        <Button
-                                            title={loading ? "Verificando..." : "Confirmar Código"}
-                                            onPress={handleVerifyOtp}
-                                            loading={loading}
-                                            disabled={otp.length < 6}
-                                            style={styles.loginButton}
+                                    </View>
+                                </View>
+
+                                <View style={styles.inputGroup}>
+                                    <Text style={styles.label}>Contraseña</Text>
+                                    <View style={styles.inputWrapper}>
+                                        <Lock size={20} color={TEXT_GRAY} style={styles.inputIcon} />
+                                        <TextInput
+                                            style={styles.input}
+                                            placeholder="••••••••"
+                                            placeholderTextColor="#9CA3AF"
+                                            value={password}
+                                            onChangeText={setPassword}
+                                            secureTextEntry
                                         />
-                                        <TouchableOpacity onPress={() => setStep('phone')} style={{ marginTop: 16, alignItems: 'center' }}>
-                                            <Text style={{ color: SUMEE_PURPLE }}>Cambiar número de teléfono</Text>
-                                        </TouchableOpacity>
-                                    </>
-                                )}
+                                    </View>
+                                </View>
+
+                                <Button
+                                    title={loading ? "Iniciando sesión..." : "Entrar a Sumee Pro"}
+                                    onPress={handleLogin}
+                                    loading={loading}
+                                    disabled={!email || !password}
+                                    style={styles.loginButton}
+                                />
                             </View>
 
                             {/* Social Login Divider (Optional but modern) */}

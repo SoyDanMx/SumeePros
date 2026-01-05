@@ -10,6 +10,10 @@
         "preview": {
             "android": {
                 "buildType": "apk"
+            },
+            "env": {
+                "EXPO_PUBLIC_SUPABASE_URL": "https://jkdvrwmanmwoyyoixmnt.supabase.co",
+                "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImprZHZyd21hbm13b3l5b2l4bW50Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI1NTI5ODQsImV4cCI6MjA2ODEyODk4NH0.K8t3xSN2Dgx47wFW4jppGhLeNeTIWVTbMkBbih35Xqk"
             }
         },
         "production": {

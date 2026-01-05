@@ -5,16 +5,18 @@ export const AuthService = {
      * Inicia el flujo de autenticación por SMS enviando el código OTP.
      */
     async signInWithPhone(phone: string) {
-        // Validación básica de formato mexicano si es necesario
+        // ... previous phone logic if kept for reference ...
         const formattedPhone = phone.startsWith('+') ? phone : `+52${phone}`;
+        return await supabase.auth.signInWithOtp({ phone: formattedPhone });
+    },
 
-        if (supabaseUrl.includes('placeholder')) {
-            console.log('[Auth] Modo Mock: Enviando OTP a', formattedPhone);
-            return { data: { message: 'OTP enviado (simulado)' }, error: null };
-        }
-
-        return await supabase.auth.signInWithOtp({
-            phone: formattedPhone,
+    /**
+     * Inicia sesión con correo y contraseña.
+     */
+    async signInWithEmail(email: string, pass: string) {
+        return await supabase.auth.signInWithPassword({
+            email,
+            password: pass,
         });
     },
 
@@ -57,5 +59,12 @@ export const AuthService = {
     async getCurrentUser() {
         const { data: { user } } = await supabase.auth.getUser();
         return user;
+    },
+
+    async updateProfile(userId: string, updates: any) {
+        return await supabase
+            .from('professional_stats')
+            .update(updates)
+            .eq('user_id', userId);
     }
 };

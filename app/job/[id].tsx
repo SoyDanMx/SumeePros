@@ -64,9 +64,8 @@ export default function JobDetailScreen() {
 
     const loadJob = async () => {
         try {
-            const jobs = await JobsService.getJobs();
-            const found = jobs.find(j => j.id === id);
-            setJob(found || null);
+            const found = await JobsService.getJobById(id as string);
+            setJob(found);
             if (found?.checklist) {
                 setCheckedItems(new Array(found.checklist.length).fill(false));
             }

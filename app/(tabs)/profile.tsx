@@ -17,8 +17,10 @@ export default function ProfileScreen() {
     const [userBadges, setUserBadges] = React.useState<UserBadges | null>(null);
 
     React.useEffect(() => {
-        BadgesService.getUserBadges('me').then(setUserBadges);
-    }, []);
+        if (user) {
+            BadgesService.getUserBadges(user.id).then(setUserBadges);
+        }
+    }, [user]);
 
     const currentLevelName = userBadges ? BadgesService.getLevelName(userBadges.currentLevel) : 'Cargando...';
     const currentLevelColor = userBadges ? BadgesService.getLevelColor(userBadges.currentLevel) : '#94A3B8';
@@ -56,9 +58,11 @@ export default function ProfileScreen() {
                                 </View>
                             </TouchableOpacity>
                             <View style={{ flex: 1, marginLeft: 16, paddingTop: 8 }}>
-                                <Text variant="h2">{user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Profesional'}</Text>
-                                <Text color={theme.textSecondary} style={{ marginBottom: 4 }}>{profile?.specialty || 'Especialista Sumee'}</Text>
-                                <Text variant="caption" color={theme.textSecondary}>{user?.email || user?.phone || 'Sin contacto'}</Text>
+                                <Text variant="h2">{profile?.full_name || user?.user_metadata?.full_name || 'Profesional'}</Text>
+                                <Text color={theme.textSecondary} style={{ marginBottom: 4 }}>
+                                    {profile?.specialty || (profile?.user_type === 'professional' ? 'Técnico Certificado' : 'Miembro Sumee')}
+                                </Text>
+                                <Text variant="caption" color={theme.textSecondary}>{user?.phone || user?.email || 'Sin contacto'}</Text>
 
                                 <View style={styles.ratingRow}>
                                     {[1, 2, 3, 4, 5].map(i => (
@@ -84,7 +88,7 @@ export default function ProfileScreen() {
                         </View>
 
                         <Text variant="caption" color={theme.textSecondary} style={{ marginTop: 12, fontStyle: 'italic' }}>
-                            Especialista: CCTV y Alarmas, Electricistas...
+                            Especialista en: {profile?.category || 'Mantenimiento General'}
                         </Text>
 
                         {/* Action Buttons */}
@@ -162,11 +166,15 @@ export default function ProfileScreen() {
                 <Card style={{ marginTop: 20 }}>
                     <View style={styles.infoRow}>
                         <Text variant="caption" color={theme.textSecondary}>Estado:</Text>
-                        <Text variant="caption" color={theme.success} weight="bold">Activo</Text>
+                        <Text variant="caption" color={profile?.expediente_status === 'approved' ? theme.success : '#F59E0B'} weight="bold">
+                            {profile?.expediente_status === 'approved' ? 'Verificado' : 'En Validación'}
+                        </Text>
                     </View>
                     <View style={styles.infoRow}>
                         <Text variant="caption" color={theme.textSecondary}>Miembro desde:</Text>
-                        <Text variant="caption" weight="bold">oct 2025</Text>
+                        <Text variant="caption" weight="bold">
+                            {user?.created_at ? new Date(user.created_at).toLocaleDateString('es-MX', { month: 'short', year: 'numeric' }) : '---'}
+                        </Text>
                     </View>
 
                     <View style={{ alignItems: 'center', marginTop: 16 }}>

@@ -14,6 +14,8 @@ import { BadgesService, UserBadges } from '@/services/badges';
 import { Skeleton } from '@/components/Skeleton';
 import ConfettiCannon from 'react-native-confetti-cannon';
 import { supabase } from '@/lib/supabase';
+import { AuthService } from '@/services/auth';
+import { NotificationsService } from '@/services/notifications';
 
 const { width, height } = Dimensions.get('window');
 
@@ -135,42 +137,64 @@ function SwipeableLeadCard({ job, onAccept, onReject, onPress }: { job: Job; onA
 export default function HomeScreen() {
     const { theme } = useTheme();
     const router = useRouter();
-    const { user } = useAuth();
+    const { user, profile } = useAuth();
     const [jobs, setJobs] = useState<Job[]>([]);
     const [currentJobIndex, setCurrentJobIndex] = useState(0);
-    const [isOnline, setIsOnline] = useState(true);
-    const [loading, setLoading] = useState(true);
+    const [isOnline, setIsOnline] = useState(profile?.is_online ?? true);
+    const [todayEarnings, setTodayEarnings] = useState(0);
     const [userBadges, setUserBadges] = useState<UserBadges | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [loading, setLoading] = useState(true);
     const [showConfetti, setShowConfetti] = useState(false);
-    const [bypassVerification, setBypassVerification] = useState(false);
 
     // Default location (Mexico City)
     const defaultLocation = { latitude: 19.4326, longitude: -99.1332 };
 
     useEffect(() => {
         loadData();
-        BadgesService.getUserBadges('me').then(setUserBadges);
-    }, []);
+    }, [user]);
+
+    useEffect(() => {
+        if (profile) {
+            setIsOnline(profile.is_online);
+        }
+    }, [profile]);
+
+    useEffect(() => {
+        if (user) {
+            NotificationsService.registerForPushNotificationsAsync(user.id);
+        }
+    }, [user]);
 
     const triggerCelebration = () => {
         setShowConfetti(false);
         setTimeout(() => setShowConfetti(true), 10);
     };
 
-    const expedienteStatus = bypassVerification ? 'approved' : (userBadges?.expediente_status || 'not_uploaded');
-    const subscription = JobsService.subscribeToJobs((payload) => {
-        console.log('New job update:', payload);
-        loadData();
-    });
+    const expedienteStatus = userBadges?.expediente_status || 'not_uploaded';
 
     useEffect(() => {
+        const subscription = JobsService.subscribeToJobs((payload) => {
+            console.log('Lead update:', payload);
+
+            // Only notify for NEW jobs and if professional is online
+            if (payload.eventType === 'INSERT' && isOnline) {
+                NotificationsService.triggerLocalNotification(
+                    '🔔 Nuevo Trabajo Disponible',
+                    `${payload.new.title || payload.new.category || 'Misión Sumee'} por $${payload.new.price}`,
+                    { jobId: payload.new.id }
+                );
+            }
+
+            loadData();
+        });
+
         return () => {
             if (subscription && subscription.unsubscribe) {
                 subscription.unsubscribe();
             }
         };
-    }, []); // Empty dependency array to run once on mount and cleanup on unmount
+    }, [isOnline]); // Re-subscribe if online status changes to ensure notification logic uses correct state
 
     const loadData = async () => {
         setIsLoading(true);
@@ -178,6 +202,14 @@ export default function HomeScreen() {
             const fetchedJobs = await JobsService.getJobs();
             setJobs(fetchedJobs);
             setCurrentJobIndex(0);
+
+            if (user) {
+                const earnings = await JobsService.getEarningsToday(user.id);
+                setTodayEarnings(earnings);
+
+                const badges = await BadgesService.getUserBadges(user.id);
+                setUserBadges(badges);
+            }
         } catch (error) {
             console.error('Failed to load jobs:', error);
         } finally {
@@ -298,9 +330,13 @@ export default function HomeScreen() {
                                 <User size={24} color={TEXT_DARK} />
                             </View>
                             <View style={{ marginLeft: 10 }}>
-                                <Text style={{ fontWeight: 'bold', color: TEXT_DARK, fontSize: 16 }}>Dan Nuno</Text>
+                                <Text style={{ fontWeight: 'bold', color: TEXT_DARK, fontSize: 16 }}>
+                                    {profile?.full_name || 'Profesional'}
+                                </Text>
                                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                    <Text style={{ fontSize: 12, color: SUMEE_PURPLE, fontWeight: '600' }}>⭐ 4.9</Text>
+                                    <Text style={{ fontSize: 12, color: SUMEE_PURPLE, fontWeight: '600' }}>
+                                        ⭐ {profile?.average_rating || '5.0'}
+                                    </Text>
                                     {userBadges && (
                                         <View style={[styles.miniLevelBadge, { backgroundColor: BadgesService.getLevelColor(userBadges.currentLevel) }]}>
                                             <Trophy size={8} color="white" />
@@ -313,7 +349,9 @@ export default function HomeScreen() {
 
                         <View style={styles.earningsBadge}>
                             <Text style={{ fontSize: 10, color: TEXT_DARK, opacity: 0.6 }}>GANANCIAS HOY</Text>
-                            <Text style={{ fontWeight: '900', color: SUMEE_GREEN, fontSize: 20 }}>$850.00</Text>
+                            <Text style={{ fontWeight: '900', color: SUMEE_GREEN, fontSize: 20 }}>
+                                ${todayEarnings.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                            </Text>
                         </View>
                     </View>
 
@@ -326,7 +364,12 @@ export default function HomeScreen() {
                         </View>
                         <Switch
                             value={isOnline}
-                            onValueChange={setIsOnline}
+                            onValueChange={async (value) => {
+                                setIsOnline(value);
+                                if (user) {
+                                    await AuthService.updateProfile(user.id, { is_online: value });
+                                }
+                            }}
                             trackColor={{ false: '#E5E7EB', true: '#C4B5FD' }}
                             thumbColor={isOnline ? SUMEE_PURPLE : '#F3F4F6'}
                         />
@@ -365,17 +408,6 @@ export default function HomeScreen() {
                                     style={{ width: '100%', marginTop: 10, backgroundColor: SUMEE_PURPLE, paddingVertical: 12, borderRadius: 24, alignItems: 'center' }}
                                 >
                                     <Text style={{ color: 'white', fontWeight: 'bold' }}>Subir Documentos</Text>
-                                </TouchableOpacity>
-
-                                {/* Botón Temporal de Debug */}
-                                <TouchableOpacity
-                                    onPress={() => {
-                                        setBypassVerification(true);
-                                        triggerCelebration();
-                                    }}
-                                    style={{ marginTop: 20 }}
-                                >
-                                    <Text style={{ color: theme.primary, fontSize: 12, opacity: 0.5 }}>[ DEBUG: Simular Aprobación ]</Text>
                                 </TouchableOpacity>
                             </>
                         ) : (

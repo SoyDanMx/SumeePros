@@ -8,25 +8,31 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { ArrowLeft, Trophy, ChevronRight, Info, CheckCircle2, Lock } from 'lucide-react-native';
 import { BadgesService, UserBadges, Badge, BadgeCategory, BADGE_COLORS } from '@/services/badges';
 
+import { useAuth } from '@/contexts/AuthContext';
+
 const { width } = Dimensions.get('window');
 
 export default function AchievementsScreen() {
     const { theme } = useTheme();
     const router = useRouter();
+    const { user } = useAuth();
     const [userBadges, setUserBadges] = useState<UserBadges | null>(null);
     const [loading, setLoading] = useState(true);
     const [selectedCategory, setSelectedCategory] = useState<BadgeCategory | 'all'>('all');
 
     useEffect(() => {
-        loadData();
-    }, []);
+        if (user) {
+            loadData();
+        }
+    }, [user]);
 
     const loadData = async () => {
+        if (!user) return;
         try {
-            const data = await BadgesService.getUserBadges('me');
+            const data = await BadgesService.getUserBadges(user.id);
             setUserBadges(data);
         } catch (error) {
-            console.error(error);
+            console.error('[Achievements] Error:', error);
         } finally {
             setLoading(false);
         }

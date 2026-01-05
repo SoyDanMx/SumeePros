@@ -28,6 +28,7 @@ export default function PortfolioScreen() {
     // Modal states
     const [isAddModalVisible, setIsAddModalVisible] = useState(false);
     const [newImageUri, setNewImageUri] = useState<string | null>(null);
+    const [newTitle, setNewTitle] = useState('');
     const [newDescription, setNewDescription] = useState('');
 
     useEffect(() => {
@@ -64,7 +65,10 @@ export default function PortfolioScreen() {
     };
 
     const handleAddItem = async () => {
-        if (!newImageUri || !user) return;
+        if (!newImageUri || !user || !newTitle.trim()) {
+            Alert.alert('Datos incompletos', 'Por favor añade una foto y un título para tu trabajo.');
+            return;
+        }
 
         setUploading(true);
         try {
@@ -88,12 +92,13 @@ export default function PortfolioScreen() {
 
             // 2. Save to database
             const publicUrl = `${supabaseUrl}/storage/v1/object/public/portfolio/${uploadData.path}`;
-            const newItem = await PortfolioService.addPortfolioItem(user.id, publicUrl, newDescription);
+            const newItem = await PortfolioService.addPortfolioItem(user.id, publicUrl, newTitle, newDescription);
 
             if (newItem) {
                 setItems([newItem, ...items]);
                 setIsAddModalVisible(false);
                 setNewImageUri(null);
+                setNewTitle('');
                 setNewDescription('');
                 Alert.alert('Éxito', 'Trabajo añadido a tu portafolio.');
             }
@@ -158,9 +163,14 @@ export default function PortfolioScreen() {
                             <Card key={item.id} style={styles.portfolioCard}>
                                 <Image source={{ uri: item.image_url }} style={styles.portfolioImage} />
                                 <View style={styles.cardFooter}>
-                                    <Text variant="caption" numberOfLines={2} color="#475569" style={{ flex: 1 }}>
-                                        {item.description || "Sin descripción"}
-                                    </Text>
+                                    <View style={{ flex: 1 }}>
+                                        <Text weight="bold" numberOfLines={1} style={{ fontSize: 13, color: '#1E293B' }}>
+                                            {item.title || "Sin título"}
+                                        </Text>
+                                        <Text variant="caption" numberOfLines={1} color="#64748B">
+                                            {item.description || "Sin descripción"}
+                                        </Text>
+                                    </View>
                                     <TouchableOpacity
                                         onPress={() => handleDeleteItem(item.id)}
                                         style={styles.deleteBtn}
@@ -218,14 +228,22 @@ export default function PortfolioScreen() {
                                 </View>
                             )}
 
-                            <Text style={styles.inputLabel}>Descripción (Opcional)</Text>
+                            <Text style={styles.inputLabel}>Título del Trabajo *</Text>
                             <TextInput
                                 style={styles.input}
-                                placeholder="Ej. Instalación de panel solar de 500W..."
+                                placeholder="Ej. Instalación de CCTV, Instalación de bomba..."
+                                value={newTitle}
+                                onChangeText={setNewTitle}
+                            />
+
+                            <Text style={[styles.inputLabel, { marginTop: 16 }]}>Más detalles (Opcional)</Text>
+                            <TextInput
+                                style={[styles.input, { minHeight: 60 }]}
+                                placeholder="Detalla qué hiciste en este proyecto..."
                                 value={newDescription}
                                 onChangeText={setNewDescription}
                                 multiline
-                                numberOfLines={3}
+                                numberOfLines={2}
                             />
 
                             <Button

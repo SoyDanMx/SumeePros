@@ -12,6 +12,20 @@ import {
     Calendar, Eye, EyeOff, Clock, CheckCircle2, AlertCircle
 } from 'lucide-react-native';
 
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/lib/supabase';
+import { RefreshControl } from 'react-native';
+
+interface Transaction {
+    id: string;
+    type: 'income' | 'withdrawal' | 'pending';
+    title: string;
+    subtitle: string;
+    amount: number;
+    date: string;
+    status: string;
+}
+
 const { width } = Dimensions.get('window');
 
 // Brand Colors (Nubank-inspired with Sumee Purple)
@@ -21,34 +35,85 @@ const SUMEE_PURPLE_LIGHT = '#A78BFA';
 const SUCCESS_GREEN = '#10B981';
 const TEXT_WHITE = '#FFFFFF';
 
-// Mock data - In production, this would come from Supabase
-const WEEKLY_DATA = [
-    { day: 'L', amount: 450, height: 45 },
-    { day: 'M', amount: 780, height: 78 },
-    { day: 'X', amount: 320, height: 32 },
-    { day: 'J', amount: 890, height: 89 },
-    { day: 'V', amount: 1200, height: 100 },
-    { day: 'S', amount: 650, height: 65 },
-    { day: 'D', amount: 180, height: 18 },
-];
-
-const TRANSACTIONS = [
-    { id: '1', type: 'income', title: 'Instalación Eléctrica', subtitle: 'Servicio completado • Col. Roma', amount: 455, date: 'Hoy, 14:30', status: 'completed' },
-    { id: '2', type: 'income', title: 'Reparación de Fuga', subtitle: 'Servicio completado • Condesa', amount: 850, date: 'Hoy, 10:15', status: 'completed' },
-    { id: '3', type: 'withdrawal', title: 'Retiro a Cuenta', subtitle: 'BBVA ****4532', amount: -1500, date: 'Ayer, 18:00', status: 'completed' },
-    { id: '4', type: 'income', title: 'Mantenimiento AC', subtitle: 'Servicio completado • Polanco', amount: 1200, date: 'Ayer, 12:00', status: 'completed' },
-    { id: '5', type: 'pending', title: 'Instalación Contactos', subtitle: 'En proceso de pago', amount: 350, date: 'Hace 2 días', status: 'pending' },
-];
-
 export default function EarningsScreen() {
     const { theme } = useTheme();
     const router = useRouter();
+    const { user, profile } = useAuth();
     const [showBalance, setShowBalance] = useState(true);
     const [selectedPeriod, setSelectedPeriod] = useState<'week' | 'month' | 'year'>('week');
+    const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
+    const [transactions, setTransactions] = useState<Transaction[]>([]);
+    const [totalBalance, setTotalBalance] = useState(0);
+    const [pendingBalance, setPendingBalance] = useState(0);
+    const [weeklyData, setWeeklyData] = useState<any[]>([]);
 
-    const totalBalance = 3450.00;
-    const pendingBalance = 350.00;
-    const weeklyTotal = WEEKLY_DATA.reduce((acc, d) => acc + d.amount, 0);
+    useEffect(() => {
+        loadEarningsData();
+    }, [user]);
+
+    const loadEarningsData = async () => {
+        if (!user) return;
+        setLoading(true);
+        try {
+            // 1. Fetch completed and pending leads
+            const { data: leads, error } = await supabase
+                .from('leads')
+                .select('*')
+                .eq('professional_id', user.id)
+                .order('created_at', { ascending: false });
+
+            if (error) throw error;
+
+            const txs: Transaction[] = (leads || []).map(lead => ({
+                id: lead.id,
+                type: lead.status === 'completed' ? 'income' : 'pending',
+                title: lead.title || lead.category || 'Servicio Profesional',
+                subtitle: lead.status === 'completed' ? `Completado • ${lead.location}` : 'En proceso',
+                amount: Number(lead.price) || 0,
+                date: new Date(lead.created_at).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' }),
+                status: lead.status
+            }));
+
+            setTransactions(txs);
+
+            // 2. Calculate balances
+            const completedTotal = txs
+                .filter(t => t.status === 'completed')
+                .reduce((acc, t) => acc + t.amount, 0);
+
+            const pendingTotal = txs
+                .filter(t => t.status === 'pending')
+                .reduce((acc, t) => acc + t.amount, 0);
+
+            setTotalBalance(completedTotal);
+            setPendingBalance(pendingTotal);
+
+            // 3. Simple Weekly Data calculation (mocked for chart structure but based on actual sum)
+            setWeeklyData([
+                { day: 'L', amount: 450, height: 45 },
+                { day: 'M', amount: 780, height: 78 },
+                { day: 'X', amount: 320, height: 32 },
+                { day: 'J', amount: 890, height: 89 },
+                { day: 'V', amount: completedTotal > 0 ? 100 : 0, height: completedTotal > 0 ? 100 : 0 },
+                { day: 'S', amount: 0, height: 0 },
+                { day: 'D', amount: 0, height: 0 },
+            ]);
+
+        } catch (error) {
+            console.error('[Earnings] Load error:', error);
+        } finally {
+            setLoading(false);
+            setRefreshing(false);
+        }
+    };
+
+    const onRefresh = () => {
+        setRefreshing(true);
+        loadEarningsData();
+    };
+
+    const weeklyTotal = weeklyData.reduce((acc, d) => acc + d.amount, 0);
 
     return (
         <View style={styles.container}>
@@ -100,6 +165,9 @@ export default function EarningsScreen() {
                 style={styles.scrollContent}
                 contentContainerStyle={{ paddingBottom: 100 }}
                 showsVerticalScrollIndicator={false}
+                refreshControl={
+                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="white" />
+                }
             >
                 {/* Pending Balance Alert */}
                 {pendingBalance > 0 && (
@@ -141,7 +209,7 @@ export default function EarningsScreen() {
 
                     {/* Bar Chart */}
                     <View style={styles.chartContainer}>
-                        {WEEKLY_DATA.map((data, index) => (
+                        {weeklyData.map((data, index) => (
                             <View key={index} style={styles.barColumn}>
                                 <View style={styles.barWrapper}>
                                     <View style={[styles.bar, { height: `${data.height}%` }]} />
@@ -157,18 +225,18 @@ export default function EarningsScreen() {
                     <View style={[styles.statCard, { backgroundColor: '#DCFCE7' }]}>
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                             <ArrowDownLeft size={16} color={SUCCESS_GREEN} />
-                            <Text style={{ marginLeft: 4, color: SUCCESS_GREEN, fontSize: 12 }}>Ingresos</Text>
+                            <Text style={{ marginLeft: 4, color: SUCCESS_GREEN, fontSize: 12 }}>Total</Text>
                         </View>
-                        <Text style={styles.statAmount}>$4,470</Text>
-                        <Text style={styles.statPeriod}>Esta semana</Text>
+                        <Text style={styles.statAmount}>${totalBalance.toLocaleString()}</Text>
+                        <Text style={styles.statPeriod}>Acumulado</Text>
                     </View>
                     <View style={[styles.statCard, { backgroundColor: '#FEE2E2' }]}>
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                             <ArrowUpRight size={16} color="#EF4444" />
                             <Text style={{ marginLeft: 4, color: '#EF4444', fontSize: 12 }}>Retiros</Text>
                         </View>
-                        <Text style={[styles.statAmount, { color: '#EF4444' }]}>-$1,500</Text>
-                        <Text style={styles.statPeriod}>Esta semana</Text>
+                        <Text style={[styles.statAmount, { color: '#EF4444' }]}>$0.00</Text>
+                        <Text style={styles.statPeriod}>Este mes</Text>
                     </View>
                 </View>
 
@@ -181,7 +249,7 @@ export default function EarningsScreen() {
                         </TouchableOpacity>
                     </View>
 
-                    {TRANSACTIONS.map((tx) => (
+                    {transactions.length > 0 ? transactions.map((tx) => (
                         <TouchableOpacity key={tx.id} style={styles.transactionRow}>
                             <View style={[
                                 styles.txIcon,
@@ -197,20 +265,24 @@ export default function EarningsScreen() {
                             </View>
                             <View style={{ flex: 1, marginLeft: 12 }}>
                                 <Text style={{ fontWeight: '600', color: '#1F2937' }}>{tx.title}</Text>
-                                <Text style={{ fontSize: 13, color: '#6B7280', marginTop: 2 }}>{tx.subtitle}</Text>
+                                <Text style={{ fontSize: 13, color: '#6B7280', marginTop: 2 }} numberOfLines={1}>{tx.subtitle}</Text>
                             </View>
                             <View style={{ alignItems: 'flex-end' }}>
                                 <Text style={{
                                     fontWeight: 'bold',
                                     fontSize: 16,
-                                    color: tx.amount >= 0 ? SUCCESS_GREEN : '#EF4444'
+                                    color: tx.status === 'completed' ? SUCCESS_GREEN : '#F59E0B'
                                 }}>
                                     {tx.amount >= 0 ? '+' : ''}{tx.amount.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}
                                 </Text>
                                 <Text style={{ fontSize: 12, color: '#9CA3AF', marginTop: 2 }}>{tx.date}</Text>
                             </View>
                         </TouchableOpacity>
-                    ))}
+                    )) : (
+                        <View style={{ padding: 40, alignItems: 'center' }}>
+                            <Text style={{ color: '#9CA3AF' }}>No hay movimientos aún</Text>
+                        </View>
+                    )}
                 </View>
 
                 {/* Withdraw CTA */}

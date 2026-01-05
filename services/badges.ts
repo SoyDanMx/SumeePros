@@ -12,10 +12,12 @@ export interface Badge {
     icon: string; // emoji or icon name
     category: BadgeCategory;
     level: BadgeLevel;
-    requirement: number; // e.g., 10 jobs, 4.5 rating
+    requirement_value: number; // e.g., 10 jobs, 4.5 rating
+    requirement_type: string; // 'jobs', 'rating', 'speed', etc.
+    points_awarded: number;
     requirementLabel: string;
     unlockedAt?: Date;
-    progress?: number; // current progress towards requirement
+    progress?: number; // current progress towards requirement_value
 }
 
 export interface UserBadges {
@@ -38,7 +40,9 @@ export const BADGE_DEFINITIONS: Omit<Badge, 'unlockedAt' | 'progress'>[] = [
         icon: '🎯',
         category: 'jobs',
         level: 'bronze',
-        requirement: 1,
+        requirement_value: 1,
+        requirement_type: 'jobs',
+        points_awarded: 10,
         requirementLabel: '1 trabajo completado',
     },
     {
@@ -48,7 +52,9 @@ export const BADGE_DEFINITIONS: Omit<Badge, 'unlockedAt' | 'progress'>[] = [
         icon: '🔧',
         category: 'jobs',
         level: 'bronze',
-        requirement: 10,
+        requirement_value: 10,
+        requirement_type: 'jobs',
+        points_awarded: 25,
         requirementLabel: '10 trabajos completados',
     },
     {
@@ -58,7 +64,9 @@ export const BADGE_DEFINITIONS: Omit<Badge, 'unlockedAt' | 'progress'>[] = [
         icon: '⚡',
         category: 'jobs',
         level: 'silver',
-        requirement: 50,
+        requirement_value: 50,
+        requirement_type: 'jobs',
+        points_awarded: 50,
         requirementLabel: '50 trabajos completados',
     },
     {
@@ -68,7 +76,9 @@ export const BADGE_DEFINITIONS: Omit<Badge, 'unlockedAt' | 'progress'>[] = [
         icon: '💯',
         category: 'jobs',
         level: 'gold',
-        requirement: 100,
+        requirement_value: 100,
+        requirement_type: 'jobs',
+        points_awarded: 100,
         requirementLabel: '100 trabajos completados',
     },
     {
@@ -78,7 +88,9 @@ export const BADGE_DEFINITIONS: Omit<Badge, 'unlockedAt' | 'progress'>[] = [
         icon: '👑',
         category: 'jobs',
         level: 'diamond',
-        requirement: 500,
+        requirement_value: 500,
+        requirement_type: 'jobs',
+        points_awarded: 250,
         requirementLabel: '500 trabajos completados',
     },
 
@@ -90,7 +102,9 @@ export const BADGE_DEFINITIONS: Omit<Badge, 'unlockedAt' | 'progress'>[] = [
         icon: '⭐',
         category: 'rating',
         level: 'bronze',
-        requirement: 4.0,
+        requirement_value: 4.0,
+        requirement_type: 'rating',
+        points_awarded: 10,
         requirementLabel: '4.0+ promedio',
     },
     {
@@ -100,7 +114,9 @@ export const BADGE_DEFINITIONS: Omit<Badge, 'unlockedAt' | 'progress'>[] = [
         icon: '🌟',
         category: 'rating',
         level: 'silver',
-        requirement: 4.5,
+        requirement_value: 4.5,
+        requirement_type: 'rating',
+        points_awarded: 50,
         requirementLabel: '4.5+ promedio',
     },
     {
@@ -110,7 +126,9 @@ export const BADGE_DEFINITIONS: Omit<Badge, 'unlockedAt' | 'progress'>[] = [
         icon: '💎',
         category: 'rating',
         level: 'diamond',
-        requirement: 10,
+        requirement_value: 10,
+        requirement_type: 'rating_streak',
+        points_awarded: 100,
         requirementLabel: '10 trabajos perfectos seguidos',
     },
 
@@ -122,7 +140,9 @@ export const BADGE_DEFINITIONS: Omit<Badge, 'unlockedAt' | 'progress'>[] = [
         icon: '🚀',
         category: 'speed',
         level: 'bronze',
-        requirement: 30,
+        requirement_value: 30,
+        requirement_type: 'response_time',
+        points_awarded: 10,
         requirementLabel: 'Respuesta < 30 seg',
     },
     {
@@ -132,7 +152,9 @@ export const BADGE_DEFINITIONS: Omit<Badge, 'unlockedAt' | 'progress'>[] = [
         icon: '🌅',
         category: 'speed',
         level: 'silver',
-        requirement: 5,
+        requirement_value: 5,
+        requirement_type: 'morning_jobs',
+        points_awarded: 25,
         requirementLabel: '5 trabajos matutinos',
     },
     {
@@ -142,7 +164,9 @@ export const BADGE_DEFINITIONS: Omit<Badge, 'unlockedAt' | 'progress'>[] = [
         icon: '🦉',
         category: 'speed',
         level: 'silver',
-        requirement: 5,
+        requirement_value: 5,
+        requirement_type: 'night_jobs',
+        points_awarded: 25,
         requirementLabel: '5 trabajos nocturnos',
     },
 
@@ -154,7 +178,9 @@ export const BADGE_DEFINITIONS: Omit<Badge, 'unlockedAt' | 'progress'>[] = [
         icon: '🔥',
         category: 'loyalty',
         level: 'bronze',
-        requirement: 7,
+        requirement_value: 7,
+        requirement_type: 'streak_days',
+        points_awarded: 10,
         requirementLabel: '7 días seguidos',
     },
     {
@@ -164,7 +190,9 @@ export const BADGE_DEFINITIONS: Omit<Badge, 'unlockedAt' | 'progress'>[] = [
         icon: '📆',
         category: 'loyalty',
         level: 'gold',
-        requirement: 30,
+        requirement_value: 30,
+        requirement_type: 'streak_days',
+        points_awarded: 100,
         requirementLabel: '30 días seguidos',
     },
     {
@@ -174,7 +202,9 @@ export const BADGE_DEFINITIONS: Omit<Badge, 'unlockedAt' | 'progress'>[] = [
         icon: '🎖️',
         category: 'loyalty',
         level: 'diamond',
-        requirement: 365,
+        requirement_value: 365,
+        requirement_type: 'days_since_signup',
+        points_awarded: 500,
         requirementLabel: '1 año en Sumee',
     },
 
@@ -186,7 +216,9 @@ export const BADGE_DEFINITIONS: Omit<Badge, 'unlockedAt' | 'progress'>[] = [
         icon: '🔧',
         category: 'specialty',
         level: 'silver',
-        requirement: 20,
+        requirement_value: 20,
+        requirement_type: 'category_jobs',
+        points_awarded: 50,
         requirementLabel: '20 trabajos de plomería',
     },
     {
@@ -196,7 +228,9 @@ export const BADGE_DEFINITIONS: Omit<Badge, 'unlockedAt' | 'progress'>[] = [
         icon: '⚡',
         category: 'specialty',
         level: 'silver',
-        requirement: 20,
+        requirement_value: 20,
+        requirement_type: 'category_jobs',
+        points_awarded: 50,
         requirementLabel: '20 trabajos eléctricos',
     },
     {
@@ -206,7 +240,9 @@ export const BADGE_DEFINITIONS: Omit<Badge, 'unlockedAt' | 'progress'>[] = [
         icon: '🛠️',
         category: 'specialty',
         level: 'gold',
-        requirement: 5,
+        requirement_value: 5,
+        requirement_type: 'unique_categories',
+        points_awarded: 150,
         requirementLabel: '5+ categorías diferentes',
     },
 
@@ -218,7 +254,9 @@ export const BADGE_DEFINITIONS: Omit<Badge, 'unlockedAt' | 'progress'>[] = [
         icon: '🤝',
         category: 'social',
         level: 'bronze',
-        requirement: 1,
+        requirement_value: 1,
+        requirement_type: 'referrals',
+        points_awarded: 25,
         requirementLabel: '1 referido',
     },
     {
@@ -228,7 +266,9 @@ export const BADGE_DEFINITIONS: Omit<Badge, 'unlockedAt' | 'progress'>[] = [
         icon: '👥',
         category: 'social',
         level: 'silver',
-        requirement: 5,
+        requirement_value: 5,
+        requirement_type: 'referrals',
+        points_awarded: 100,
         requirementLabel: '5 referidos',
     },
     {
@@ -238,7 +278,9 @@ export const BADGE_DEFINITIONS: Omit<Badge, 'unlockedAt' | 'progress'>[] = [
         icon: '🏆',
         category: 'social',
         level: 'diamond',
-        requirement: 20,
+        requirement_value: 20,
+        requirement_type: 'referrals',
+        points_awarded: 500,
         requirementLabel: '20 referidos',
     },
 
@@ -250,7 +292,9 @@ export const BADGE_DEFINITIONS: Omit<Badge, 'unlockedAt' | 'progress'>[] = [
         icon: '🆔',
         category: 'social',
         level: 'silver',
-        requirement: 1,
+        requirement_value: 1,
+        requirement_type: 'verification',
+        points_awarded: 100,
         requirementLabel: 'INE/Pasaporte validado',
     },
     {
@@ -260,7 +304,9 @@ export const BADGE_DEFINITIONS: Omit<Badge, 'unlockedAt' | 'progress'>[] = [
         icon: '👤',
         category: 'social',
         level: 'bronze',
-        requirement: 100,
+        requirement_value: 100,
+        requirement_type: 'profile_completion',
+        points_awarded: 50,
         requirementLabel: '100% completado',
     },
     {
@@ -270,7 +316,9 @@ export const BADGE_DEFINITIONS: Omit<Badge, 'unlockedAt' | 'progress'>[] = [
         icon: '🛡️',
         category: 'rating',
         level: 'diamond',
-        requirement: 1,
+        requirement_value: 1,
+        requirement_type: 'special_status',
+        points_awarded: 1000,
         requirementLabel: 'Badge de Excelencia Sumee',
     },
 ];
@@ -319,28 +367,45 @@ export const BadgesService = {
      * Get user badges with progress from Supabase
      */
     async getUserBadges(userId: string): Promise<UserBadges> {
+        if (!userId || userId === 'me') {
+            // Simplified for cases where ID isn't ready
+            return this.getMockBadges('anonymous');
+        }
+
         try {
-            // In a real app 'me' should be auth.uid()
             const { data: stats, error: statsError } = await supabase
                 .from('professional_stats')
                 .select('*')
+                .eq('user_id', userId)
                 .single();
 
             const { data: userBadges, error: badgesError } = await supabase
                 .from('user_badges')
-                .select('*');
+                .select('*')
+                .eq('user_id', userId);
 
             if (statsError || !stats) {
-                // Fallback to mock for development if no DB record exists
+                console.warn('[BadgesService] No stats found for user, using mock');
                 return this.getMockBadges(userId);
             }
 
             const badges = BADGE_DEFINITIONS.map(def => {
                 const unlocked = userBadges?.find(ub => ub.badge_id === def.id);
+
+                // Real logic for progress based on stats
+                let currentProgress = unlocked ? def.requirement_value : 0;
+
+                if (!unlocked) {
+                    if (def.id === 'first_job') currentProgress = stats.jobs_completed_count > 0 ? 1 : 0;
+                    if (def.id === 'jobs_10') currentProgress = stats.jobs_completed_count;
+                    if (def.id === 'jobs_50') currentProgress = stats.jobs_completed_count;
+                    if (def.id === 'rating_4') currentProgress = stats.average_rating || 0;
+                }
+
                 return {
                     ...def,
                     unlockedAt: unlocked ? new Date(unlocked.unlocked_at) : undefined,
-                    progress: unlocked ? unlocked.progress : stats.jobs_completed_count * 0.1, // Mock logic for demo
+                    progress: currentProgress,
                 };
             });
 
@@ -356,6 +421,7 @@ export const BadgesService = {
                 expediente_status: stats.expediente_status
             };
         } catch (e) {
+            console.error('[BadgesService] Error:', e);
             return this.getMockBadges(userId);
         }
     },
@@ -374,10 +440,10 @@ export const BadgesService = {
             .filter(def => !mockUnlockedBadges.find(b => b.id === def.id))
             .map(def => ({
                 ...def,
-                progress: Math.random() * def.requirement * 0.3,
+                progress: Math.random() * def.requirement_value * 0.3,
             }));
 
-        const totalPoints = mockUnlockedBadges.reduce((sum, badge) => sum + BADGE_POINTS[badge.level], 250); // Start at level 2
+        const totalPoints = mockUnlockedBadges.reduce((sum, badge) => sum + badge.points_awarded, 250); // Start at level 2
 
         return {
             userId,
@@ -400,7 +466,7 @@ export const BadgesService = {
      */
     getProgressPercentage(badge: Badge): number {
         if (!badge.progress) return 0;
-        return Math.min((badge.progress / badge.requirement) * 100, 100);
+        return Math.min((badge.progress / badge.requirement_value) * 100, 100);
     },
 
     /**

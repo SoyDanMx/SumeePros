@@ -22,19 +22,21 @@ const { width } = Dimensions.get('window');
 export default function ProfessionalIDScreen() {
     const { theme } = useTheme();
     const router = useRouter();
-    const { user } = useAuth();
+    const { user, profile } = useAuth();
     const [userBadges, setUserBadges] = React.useState<UserBadges | null>(null);
     const viewRef = useRef(null);
 
     React.useEffect(() => {
-        BadgesService.getUserBadges('me').then(setUserBadges);
-    }, []);
+        if (user) {
+            BadgesService.getUserBadges(user.id).then(setUserBadges);
+        }
+    }, [user]);
 
     const currentLevelName = userBadges ? BadgesService.getLevelName(userBadges.currentLevel) : 'Cargando...';
     const currentLevelColor = userBadges ? BadgesService.getLevelColor(userBadges.currentLevel) : '#94A3B8';
 
     // Public verification URL
-    const verificationUrl = `https://sumeeapp.com/v/${user?.id || 'anonymous'}`;
+    const verificationUrl = `https://sumee.pro/verify/${user?.id || 'anonymous'}`;
 
     const handleShare = async () => {
         try {
@@ -99,12 +101,12 @@ export default function ProfessionalIDScreen() {
                             </View>
 
                             <View style={styles.textInfo}>
-                                <Text style={styles.nameText}>Dan Nuno</Text>
-                                <Text style={styles.specialtyText}>Sistemas de Seguridad & CCTV</Text>
+                                <Text style={styles.nameText}>{profile?.full_name || user?.user_metadata?.full_name || 'Profesional Sumee'}</Text>
+                                <Text style={styles.specialtyText}>{profile?.specialty || profile?.category || 'Especialista Verificado'}</Text>
 
                                 <View style={styles.ratingRow}>
                                     <Star size={16} color="#F59E0B" fill="#F59E0B" />
-                                    <Text style={styles.ratingText}>5.0 Premium Score</Text>
+                                    <Text style={styles.ratingText}>{profile?.average_rating || '5.0'} Premium Score</Text>
                                 </View>
                             </View>
                         </View>
