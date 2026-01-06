@@ -10,12 +10,21 @@ import { useAuth } from '@/contexts/AuthContext';
 import { JobsService, Job } from '@/services/jobs';
 import { JobMap } from '@/components/JobMap';
 import { RatingModal } from '@/components/RatingModal';
+import { BidirectionalRatingModal } from '@/components/BidirectionalRatingModal';
+import { ReviewsService } from '@/services/reviews';
 import { ConfettiCelebration } from '@/components/ConfettiCelebration';
+import { StreakService } from '@/services/streaks';
+import { LocationTracker } from '@/services/location-tracking';
 import {
     MapPin, Clock, DollarSign, ShieldAlert, ArrowLeft, Phone, MessageCircle,
     Navigation, User, CheckCircle, Sparkles, Timer, CheckSquare, Square,
-    Camera, AlertCircle, ThumbsUp
+    Camera, AlertCircle, ThumbsUp, FileText
 } from 'lucide-react-native';
+import { QuickQuoteModal } from '@/components/QuickQuoteModal';
+import { ScheduleModal } from '@/components/ScheduleModal';
+import { WorkInProgressModal } from '@/components/WorkInProgressModal';
+import { ChatScreen } from '@/components/ChatScreen';
+import { ChatService } from '@/services/chat';
 
 const { width } = Dimensions.get('window');
 
@@ -37,17 +46,33 @@ export default function JobDetailScreen() {
     // Timer state
     const [elapsedTime, setElapsedTime] = useState(0);
     const timerRef = useRef<NodeJS.Timeout | null>(null);
+    const locationTrackerRef = useRef<LocationTracker | null>(null);
 
     // Checklist state
     const [checkedItems, setCheckedItems] = useState<boolean[]>([]);
 
     // Rating & Celebration
     const [showRating, setShowRating] = useState(false);
+    const [showBidirectionalRating, setShowBidirectionalRating] = useState(false);
     const [showConfetti, setShowConfetti] = useState(false);
     const [isCompleting, setIsCompleting] = useState(false);
+    const [canReview, setCanReview] = useState(false);
+
+    // Quote & Schedule Modals
+    const [showQuoteModal, setShowQuoteModal] = useState(false);
+    const [showScheduleModal, setShowScheduleModal] = useState(false);
+    const [selectedJobForSchedule, setSelectedJobForSchedule] = useState<Job | null>(null);
+    
+    // Work in Progress Modal
+    const [showWorkProgressModal, setShowWorkProgressModal] = useState(false);
+    
+    // Chat
+    const [conversation, setConversation] = useState<any>(null);
+    const [loadingConversation, setLoadingConversation] = useState(false);
 
     useEffect(() => {
         loadJob();
+        loadConversation();
         return () => {
             if (timerRef.current) clearInterval(timerRef.current);
         };
@@ -59,8 +84,37 @@ export default function JobDetailScreen() {
             timerRef.current = setInterval(() => {
                 setElapsedTime(prev => prev + 1);
             }, 1000);
+
+            // Start location tracking when job is accepted
+            if (job && user?.id) {
+                locationTrackerRef.current = new LocationTracker({
+                    jobId: job.id,
+                    userId: user.id,
+                    updateInterval: 30000, // 30 seconds
+                    onLocationUpdate: (location) => {
+                        console.log('[JobDetail] Location updated:', location);
+                    },
+                    onError: (error) => {
+                        console.error('[JobDetail] Location tracking error:', error);
+                    },
+                });
+
+                locationTrackerRef.current.start().catch(console.error);
+            }
         }
-    }, [accepted]);
+
+        // Cleanup on unmount or when job is completed
+        return () => {
+            if (timerRef.current) {
+                clearInterval(timerRef.current);
+                timerRef.current = null;
+            }
+            if (locationTrackerRef.current) {
+                locationTrackerRef.current.stop();
+                locationTrackerRef.current = null;
+            }
+        };
+    }, [accepted, job?.id, user?.id]);
 
     const loadJob = async () => {
         try {
@@ -76,16 +130,125 @@ export default function JobDetailScreen() {
         }
     };
 
-    const handleAccept = async () => {
-        if (!job) return;
-        setAccepting(true);
+    const loadConversation = async () => {
+        if (!id || !user?.id) return;
+        setLoadingConversation(true);
         try {
-            const { error } = await JobsService.acceptJob(job.id, user?.id || 'anon');
-            if (error) throw error;
-            setAccepted(true);
-            Alert.alert('¡Trabajo Aceptado!', 'Ve al domicilio lo antes posible. Los datos del cliente son visibles.');
+            const conv = await ChatService.getOrCreateConversation(id as string, user.id);
+            setConversation(conv);
         } catch (error) {
-            Alert.alert('Error', 'No se pudo aceptar el trabajo. Tal vez ya fue tomado.');
+            console.error('[JobDetail] Error loading conversation:', error);
+        } finally {
+            setLoadingConversation(false);
+        }
+    };
+
+    const handleAccept = async () => {
+        if (!job || !user?.id) return;
+        
+        setAccepting(true);
+        
+        // Optimistic update: actualizar UI inmediatamente
+        const previousJob = job;
+        setJob({ ...job, status: 'accepted' as const });
+        setAccepted(true);
+        
+        try {
+            // Usar servicio mejorado si está disponible
+            try {
+                const { JobsServiceEnhanced } = await import('@/services/jobs-enhanced');
+                const result = await JobsServiceEnhanced.acceptJobAtomic(job.id, user.id, {
+                    optimisticUpdate: true,
+                    notifyClient: true,
+                    validateAvailability: false, // Puedes habilitar esto si quieres
+                    validateDistance: false,   // Puedes habilitar esto si quieres
+                });
+
+                if (!result.success) {
+                    // Revertir optimistic update
+                    setJob(previousJob);
+                    setAccepted(false);
+                    
+                    // Mostrar error específico
+                    const errorMessage = result.error?.message || 'No se pudo aceptar el trabajo.';
+                    Alert.alert('Error', errorMessage);
+                    return;
+                }
+
+                // Si ya estaba aceptado, mostrar mensaje diferente
+                if (result.alreadyAccepted) {
+                    Alert.alert('Trabajo Aceptado', 'Este trabajo ya estaba aceptado por ti.');
+                } else {
+                    // Reload job data to get updated status
+                    await loadJob();
+                    
+                    // Show schedule modal after accepting
+                    Alert.alert(
+                        '¡Trabajo Aceptado!',
+                        '¿Deseas agendar este trabajo ahora?',
+                        [
+                            {
+                                text: 'Más tarde',
+                                style: 'cancel',
+                                onPress: () => {
+                                    // Navigate back to jobs screen to see it in "Programados"
+                                    router.replace('/(tabs)/jobs');
+                                },
+                            },
+                            {
+                                text: 'Agendar',
+                                onPress: () => {
+                                    setShowScheduleModal(true);
+                                },
+                            },
+                        ]
+                    );
+                }
+            } catch (importError) {
+                // Fallback al servicio tradicional
+                console.warn('[JobDetail] Enhanced service not available, using fallback');
+                const { error } = await JobsService.acceptJob(job.id, user.id);
+                
+                if (error) {
+                    // Revertir optimistic update
+                    setJob(previousJob);
+                    setAccepted(false);
+                    
+                    Alert.alert('Error', error.message || 'No se pudo aceptar el trabajo. Tal vez ya fue tomado.');
+                    return;
+                }
+                
+                // Reload job data
+                await loadJob();
+                
+                // Show schedule modal
+                Alert.alert(
+                    '¡Trabajo Aceptado!',
+                    '¿Deseas agendar este trabajo ahora?',
+                    [
+                        {
+                            text: 'Más tarde',
+                            style: 'cancel',
+                            onPress: () => {
+                                router.replace('/(tabs)/jobs');
+                            },
+                        },
+                        {
+                            text: 'Agendar',
+                            onPress: () => {
+                                setShowScheduleModal(true);
+                            },
+                        },
+                    ]
+                );
+            }
+        } catch (error: any) {
+            // Revertir optimistic update
+            setJob(previousJob);
+            setAccepted(false);
+            
+            console.error('[JobDetail] Accept error:', error);
+            Alert.alert('Error', error.message || 'No se pudo aceptar el trabajo. Por favor, intenta de nuevo.');
         } finally {
             setAccepting(false);
         }
@@ -106,11 +269,71 @@ export default function JobDetailScreen() {
                             clearInterval(timerRef.current);
                             timerRef.current = null;
                         }
+                        
+                        // Complete job in database
+                        if (job && user?.id) {
+                            try {
+                                const { error } = await JobsService.completeJob(job.id, user.id);
+                                if (error) {
+                                    console.error('[JobDetail] Complete error:', error);
+                                } else {
+                                    // Update streak (Duolingo style)
+                                    try {
+                                        const streakResult = await StreakService.updateStreakOnJobCompletion(user.id);
+                                        
+                                        // Show streak milestone celebration if reached
+                                        if (streakResult.milestoneReached) {
+                                            Alert.alert(
+                                                '🔥 ¡Hito de Racha Alcanzado!',
+                                                `¡${streakResult.milestoneReached.name}! Has ganado ${streakResult.milestoneReached.reward} puntos extra.`,
+                                                [{ text: '¡Genial!' }]
+                                            );
+                                        }
+                                        
+                                        // Warn if streak is in danger
+                                        if (streakResult.streakBroken) {
+                                            Alert.alert(
+                                                '💔 Racha Rota',
+                                                'Tu racha se ha roto. ¡Comienza una nueva hoy!',
+                                                [{ text: 'Entendido' }]
+                                            );
+                                        }
+                                    } catch (streakError) {
+                                        console.error('[JobDetail] Streak update error:', streakError);
+                                    }
+                                }
+                            } catch (error) {
+                                console.error('[JobDetail] Complete job error:', error);
+                            }
+                        }
+                        
                         // Show celebration
                         setShowConfetti(true);
-                        setTimeout(() => {
-                            setShowRating(true);
-                        }, 1500);
+                        
+                        // Verificar si puede calificar antes de mostrar modal
+                        if (job && user?.id) {
+                            const canReviewJob = await ReviewsService.canReviewJob(
+                                job.id,
+                                user.id,
+                                'professional'
+                            );
+                            setCanReview(canReviewJob);
+                            
+                            if (canReviewJob && job.cliente_id) {
+                                setTimeout(() => {
+                                    setShowBidirectionalRating(true);
+                                }, 1500);
+                            } else {
+                                // Si ya calificó o no puede, solo mostrar confetti
+                                setTimeout(() => {
+                                    router.replace('/(tabs)/jobs');
+                                }, 2000);
+                            }
+                        } else {
+                            setTimeout(() => {
+                                router.replace('/(tabs)/jobs');
+                            }, 2000);
+                        }
                     }
                 }
             ]
@@ -140,15 +363,53 @@ export default function JobDetailScreen() {
 
     const openNavigation = () => {
         if (!job?.latitude || !job?.longitude) return;
-        const scheme = Platform.select({ ios: 'maps:0,0?q=', android: 'geo:0,0?q=' });
-        const latLng = `${job.latitude},${job.longitude}`;
-        const label = job.title;
-        const url = Platform.select({
-            ios: `${scheme}${label}@${latLng}`,
-            android: `${scheme}${latLng}(${label})`,
-            web: `https://www.google.com/maps/dir/?api=1&destination=${latLng}`
+        
+        const lat = job.latitude;
+        const lng = job.longitude;
+        const label = encodeURIComponent(job.title || job.location || 'Destino');
+        
+        // Improved navigation with Google Maps and Waze support (Uber/Rappi style)
+        const urls = Platform.select({
+            ios: {
+                googleMaps: `comgooglemaps://?daddr=${lat},${lng}&directionsmode=driving`,
+                appleMaps: `maps://app?daddr=${lat},${lng}&dirflg=d`,
+                waze: `waze://?ll=${lat},${lng}&navigate=yes`,
+                fallback: `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`
+            },
+            android: {
+                googleMaps: `google.navigation:q=${lat},${lng}`,
+                waze: `waze://?ll=${lat},${lng}&navigate=yes`,
+                fallback: `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`
+            },
+            default: {
+                fallback: `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`
+            }
         });
-        if (url) Linking.openURL(url);
+
+        // Try Google Maps first, then fallback
+        if (Platform.OS === 'ios') {
+            Linking.canOpenURL(urls?.googleMaps || '').then(supported => {
+                if (supported) {
+                    Linking.openURL(urls?.googleMaps || '');
+                } else {
+                    Linking.openURL(urls?.fallback || '');
+                }
+            }).catch(() => {
+                Linking.openURL(urls?.fallback || '');
+            });
+        } else if (Platform.OS === 'android') {
+            Linking.canOpenURL(urls?.googleMaps || '').then(supported => {
+                if (supported) {
+                    Linking.openURL(urls?.googleMaps || '');
+                } else {
+                    Linking.openURL(urls?.fallback || '');
+                }
+            }).catch(() => {
+                Linking.openURL(urls?.fallback || '');
+            });
+        } else {
+            Linking.openURL(urls?.fallback || '');
+        }
     };
 
     const completedTasks = checkedItems.filter(Boolean).length;
@@ -168,6 +429,29 @@ export default function JobDetailScreen() {
                 <ConfettiCelebration visible={showConfetti} onComplete={() => setShowConfetti(false)} />
 
                 {/* Rating Modal */}
+                {/* Nuevo Modal Bidireccional */}
+                {job && user?.id && job.cliente_id && (
+                    <BidirectionalRatingModal
+                        visible={showBidirectionalRating}
+                        onClose={() => {
+                            setShowBidirectionalRating(false);
+                            router.replace('/(tabs)/jobs');
+                        }}
+                        onSuccess={() => {
+                            // Recargar datos del perfil para actualizar ratings
+                            console.log('[JobDetail] Review submitted successfully');
+                        }}
+                        jobId={job.id}
+                        reviewerId={user.id}
+                        reviewerType="professional"
+                        revieweeId={job.cliente_id}
+                        revieweeType="client"
+                        revieweeName={job.client_name || job.nombre_cliente || 'Cliente'}
+                        jobTitle={job.descripcion_proyecto || job.title || 'Trabajo'}
+                    />
+                )}
+
+                {/* Modal Legacy (mantener por compatibilidad) */}
                 <RatingModal
                     visible={showRating}
                     onClose={() => {
@@ -175,8 +459,20 @@ export default function JobDetailScreen() {
                         router.replace('/');
                     }}
                     onSubmit={handleRatingSubmit}
-                    clientName={job.client_name}
-                    jobTitle={job.title}
+                    clientName={job?.client_name}
+                    jobTitle={job?.title}
+                />
+
+                {/* Work in Progress Modal */}
+                <WorkInProgressModal
+                    visible={showWorkProgressModal}
+                    job={job}
+                    professionalId={user?.id || ''}
+                    onClose={() => setShowWorkProgressModal(false)}
+                    onPhotoUploaded={() => {
+                        // Refresh job data if needed
+                        loadJob();
+                    }}
                 />
 
                 {/* Active Tabs Header */}
@@ -280,9 +576,30 @@ export default function JobDetailScreen() {
 
                             {/* Quick Actions */}
                             <View style={{ flexDirection: 'row', gap: 12, marginTop: 20 }}>
-                                <TouchableOpacity style={styles.quickAction}>
+                                <TouchableOpacity 
+                                    style={[
+                                        styles.quickAction,
+                                        (job.status !== 'en_progreso' && job.status !== 'en_sitio' && job.status !== 'accepted') && {
+                                            opacity: 0.5,
+                                        }
+                                    ]}
+                                    onPress={() => {
+                                        // Validar estado del trabajo antes de abrir modal
+                                        const validStatuses = ['en_progreso', 'en_sitio', 'accepted'];
+                                        if (!validStatuses.includes(job.status)) {
+                                            Alert.alert(
+                                                'No disponible',
+                                                'Solo puedes documentar trabajos que están en progreso o aceptados.',
+                                                [{ text: 'OK' }]
+                                            );
+                                            return;
+                                        }
+                                        setShowWorkProgressModal(true);
+                                    }}
+                                    disabled={job.status !== 'en_progreso' && job.status !== 'en_sitio' && job.status !== 'accepted'}
+                                >
                                     <Camera size={20} color={SUMEE_PURPLE} />
-                                    <Text style={{ marginLeft: 8, color: SUMEE_PURPLE, fontWeight: '600' }}>Tomar Foto</Text>
+                                    <Text style={{ marginLeft: 8, color: SUMEE_PURPLE, fontWeight: '600' }}>Documentar</Text>
                                 </TouchableOpacity>
                                 <TouchableOpacity style={styles.quickAction} onPress={openNavigation}>
                                     <Navigation size={20} color={SUMEE_PURPLE} />
@@ -318,18 +635,32 @@ export default function JobDetailScreen() {
                     )}
 
                     {activeTab === 'chat' && (
-                        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 }}>
-                            <MessageCircle size={64} color={theme.textSecondary} style={{ marginBottom: 16 }} />
-                            <Text style={{ textAlign: 'center', color: theme.textSecondary }}>
-                                Aquí podrás chatear con {job.client_name} directamente.
-                            </Text>
-                            <TouchableOpacity
-                                style={[styles.waBtn]}
-                                onPress={() => Linking.openURL(`https://wa.me/${job.client_phone?.replace(/\s/g, '')}`)}
-                            >
-                                <MessageCircle size={20} color="white" />
-                                <Text style={{ color: 'white', fontWeight: 'bold', marginLeft: 8 }}>Abrir WhatsApp</Text>
-                            </TouchableOpacity>
+                        <View style={{ flex: 1 }}>
+                            {loadingConversation ? (
+                                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                                    <ActivityIndicator size="large" color={SUMEE_PURPLE} />
+                                </View>
+                            ) : conversation ? (
+                                <ChatScreen
+                                    conversationId={conversation.id}
+                                    jobId={job.id}
+                                    otherParticipantName={job.client_name || job.nombre_cliente || 'Cliente'}
+                                />
+                            ) : (
+                                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 }}>
+                                    <MessageCircle size={64} color={theme.textSecondary} style={{ marginBottom: 16 }} />
+                                    <Text style={{ textAlign: 'center', color: theme.textSecondary }}>
+                                        No se pudo cargar el chat. Intenta de nuevo.
+                                    </Text>
+                                    <TouchableOpacity
+                                        style={[styles.waBtn, { marginTop: 20 }]}
+                                        onPress={() => Linking.openURL(`https://wa.me/${job.client_phone?.replace(/\s/g, '')}`)}
+                                    >
+                                        <MessageCircle size={20} color="white" />
+                                        <Text style={{ color: 'white', fontWeight: 'bold', marginLeft: 8 }}>Abrir WhatsApp</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            )}
                         </View>
                     )}
                 </View>
@@ -466,14 +797,49 @@ export default function JobDetailScreen() {
                     <Clock size={16} color={theme.textSecondary} />
                     <Text variant="caption" color={theme.textSecondary} style={{ marginLeft: 8 }}>Llegada requerida: &lt; 60 mins</Text>
                 </View>
-                <TouchableOpacity style={styles.acceptBtn} onPress={handleAccept} disabled={accepting}>
-                    {accepting ? (
-                        <ActivityIndicator color="white" />
-                    ) : (
-                        <Text style={{ color: 'white', fontSize: 18, fontWeight: 'bold' }}>Aceptar Trabajo</Text>
-                    )}
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', gap: 12 }}>
+                    <TouchableOpacity 
+                        style={[styles.quoteBtn, { backgroundColor: SUMEE_PURPLE }]} 
+                        onPress={() => setShowQuoteModal(true)}
+                    >
+                        <FileText size={20} color="white" />
+                        <Text style={{ color: 'white', fontSize: 16, fontWeight: 'bold', marginLeft: 8 }}>Cotizar</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.acceptBtn} onPress={handleAccept} disabled={accepting}>
+                        {accepting ? (
+                            <ActivityIndicator color="white" />
+                        ) : (
+                            <Text style={{ color: 'white', fontSize: 18, fontWeight: 'bold' }}>Aceptar</Text>
+                        )}
+                    </TouchableOpacity>
+                </View>
             </View>
+
+            {/* Quick Quote Modal */}
+            <QuickQuoteModal
+                visible={showQuoteModal}
+                job={job}
+                professionalId={user?.id || ''}
+                onClose={() => setShowQuoteModal(false)}
+                onQuoteSent={() => {
+                    // Reload job after quote is sent
+                    loadJob();
+                    setShowQuoteModal(false);
+                }}
+            />
+
+            {/* Schedule Modal */}
+            <ScheduleModal
+                visible={showScheduleModal}
+                job={job}
+                professionalId={user?.id || ''}
+                onClose={() => setShowScheduleModal(false)}
+                onScheduled={() => {
+                    // Reload job after scheduling
+                    loadJob();
+                    setShowScheduleModal(false);
+                }}
+            />
         </Screen>
     );
 }
@@ -522,12 +888,21 @@ const styles = StyleSheet.create({
     footer: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 20, paddingBottom: 34, borderTopWidth: 1 },
     warningBox: { flexDirection: 'row', justifyContent: 'center', marginBottom: 12 },
     breakdownRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+    quoteBtn: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 16,
+        borderRadius: 12,
+    },
     acceptBtn: {
-        backgroundColor: SUMEE_PURPLE,
+        flex: 1,
+        backgroundColor: SUMEE_GREEN,
         paddingVertical: 18,
         borderRadius: 16,
         alignItems: 'center',
-        shadowColor: SUMEE_PURPLE,
+        shadowColor: SUMEE_GREEN,
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
         shadowRadius: 8,
